@@ -164,18 +164,9 @@ Section "!Main EXE" SecMain
  ; Gossiplearning
  CreateDirectory "$INSTDIR\Tribler\community"
  CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework"
- CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier"
- CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db"
- CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db\corp"
- CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words"
- SetOutPath "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words"
- File Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words\*.*
- SetOutPath "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db"
- File Tribler\community\gossiplearningframework\youtube_classifier\db\*.txt
- SetOutPath "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db"
- File Tribler\community\gossiplearningframework\youtube_classifier\db\*.json
  SetOutPath "$INSTDIR\Tribler\community\gossiplearningframework"
  File Tribler\community\gossiplearningframework\*.pickle
+
  
  ; Arno, 2012-05-25: data files for pymdht
  CreateDirectory "$INSTDIR\Tribler\Core\DecentralizedTracking"
