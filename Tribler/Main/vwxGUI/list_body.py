@@ -976,10 +976,11 @@ class AbstractListBody():
         
         #cur_keys now contains all removed items
         for key in cur_keys:
-            self.items[key].DoCollapse()
-            self.items[key].Show(False)
-            self.items[key].Destroy()
-            del self.items[key]
+            if self.items[key]:
+                self.items[key].DoCollapse()
+                self.items[key].Show(False)
+                self.items[key].Destroy()
+                del self.items[key]
 
         self.data = data
         self.DoSort()

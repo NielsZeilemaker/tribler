@@ -12,7 +12,7 @@ import time as timemod
 from threading import Event, Thread, enumerate as enumerate_threads, currentThread
 from traceback import print_exc, print_stack
 import traceback
-
+from Tribler.community.gossiplearningframework.community import GossipLearningCommunity
 try:
     prctlimported = True
     import prctl
@@ -285,6 +285,7 @@ class TriblerLaunchMany(Thread):
                 schedule.append((SearchCommunity, (self.session.dispersy_member,), {}))
                 # schedule.append((EffortCommunity, (self.swift_process,), {}))
                 schedule.append((AllChannelCommunity, (self.session.dispersy_member,), {}))
+                schedule.append((GossipLearningCommunity, (self.session.dispersy_member,), {}))
                 schedule.append((ChannelCommunity, (), {}))
 
             for cls, args, kargs in schedule:

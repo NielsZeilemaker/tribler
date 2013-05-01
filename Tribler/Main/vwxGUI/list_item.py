@@ -4,7 +4,8 @@ import sys
 import json
 from Tribler.Core.CacheDB.sqlitecachedb import forceDBThread
 from Tribler.Main.vwxGUI.UserDownloadChoice import UserDownloadChoice
-from Tribler.Main.vwxGUI.widgets import NativeIcon, BetterText as StaticText, _set_font, TagText
+from Tribler.Main.vwxGUI.widgets import NativeIcon, BetterText as StaticText, _set_font, TagText,\
+    HorizontalGradientGauge
 from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
 from Tribler.Main.vwxGUI.IconsManager import IconsManager, SMALL_ICON_MAX_DIM
 from list_body import *
@@ -749,7 +750,8 @@ class AvantarItem(ListItem):
 
             for button in self.additionalButtons:
                 hSizer.Add(button, 0, wx.RESERVE_SPACE_EVEN_IF_HIDDEN | wx.ALIGN_BOTTOM)
-                button.Show(False)
+                if isinstance(button, wx.Button):
+                    button.Show(False)
 
             self.moreButton.Show(False)
 
@@ -781,7 +783,8 @@ class AvantarItem(ListItem):
                 self.moreButton.Show(color == self.list_selected)
 
             for button in self.additionalButtons:
-                button.Show(color == self.list_selected)
+                if isinstance(button, wx.Button):
+                    button.Show(color == self.list_selected)
 
     def OnChange(self):
         self.parent_list.OnChange()
@@ -928,6 +931,14 @@ class ModificationActivityItem(AvantarItem):
             button.Bind(wx.EVT_BUTTON, self.ShowTorrent)
             self.additionalButtons.append(button)
 
+        hg = HorizontalGradientGauge(self, -1, 1 - modification.getScore)
+        hg.SetMinSize((100, -1))
+        if modification.getScore < 0.5:
+            hg.SetToolTipString('We think this is not spam')
+        else:
+            hg.SetToolTipString('This is possibly spam')
+        self.additionalButtons.append(hg)
+
         im = IconsManager.getInstance()
         self.avantar = im.get_default('MODIFICATION', SMALL_ICON_MAX_DIM)
         AvantarItem.AddComponents(self, leftSpacer, rightSpacer)
@@ -985,6 +996,14 @@ class ModificationItem(AvantarItem):
                 button = wx.Button(self, -1, 'Revert Modification', style=wx.BU_EXACTFIT)
                 button.Bind(wx.EVT_BUTTON, self.RevertModification)
                 self.additionalButtons.append(button)
+
+        hg = HorizontalGradientGauge(self, -1, 1 - modification.getScore)
+        hg.SetMinSize((100, -1))
+        if modification.getScore < 0.5:
+            hg.SetToolTipString('We think this is not spam')
+        else:
+            hg.SetToolTipString('This is possibly spam')
+        self.additionalButtons.append(hg)
 
         AvantarItem.AddComponents(self, leftSpacer, rightSpacer)
 

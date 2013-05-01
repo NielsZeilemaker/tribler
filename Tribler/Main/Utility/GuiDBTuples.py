@@ -731,6 +731,12 @@ class Modification(Helper):
             searchManager = ChannelManager.getInstance()
             return searchManager.getTorrentFromChannelTorrentId(None, self.channeltorrent_id, False)
 
+    @cacheProperty
+    def getScore(self):
+        from Tribler.Main.vwxGUI.SearchGridManager import ChannelManager
+        searchManager = ChannelManager.getInstance()
+        return max(0.05, min(0.95, searchManager.getSpamScore(self)))
+
 class Moderation(Helper):
     __slots__ = ('id', 'channel_id', 'peer_id', 'by_peer_id', 'severity', 'message', 'time_stamp', 'inserted', 'modification', 'channelcast_db', 'get_nickname')
     def __init__(self, id, channel_id, peer_id, by_peer_id, severity, message, time_stamp, inserted):
