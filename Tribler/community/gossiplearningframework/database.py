@@ -14,7 +14,7 @@ LATEST_VERSION = 1
 schema = u"""
 CREATE TABLE input(
  id INTEGER,
- x STRING,
+ x BLOB,
  y INTEGER
  );
  

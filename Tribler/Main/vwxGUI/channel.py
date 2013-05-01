@@ -2255,7 +2255,7 @@ class ModificationManager(BaseManager):
             return self.channelsearch_manager.getTorrentModifications(self.torrent)
         
         if self.torrent.channel.isFavorite() or self.torrent.channel.isMyChannel():
-            startWorker(self.list.SetDelayedData, db_callback, retryOnBusy=True, priority=GUI_PRI_DISPERSY)
+            startWorker(self.list.SetDelayedData, db_callback, retryOnBusy=True, priority=GUI_PRI_DISPERSY, uId = "ModificationManager_refresh_%d"%self.torrent.channel.id)
         else:
             self.list.ShowPreview()
             self.list.dirty = False
@@ -2286,7 +2286,7 @@ class ModificationList(List):
     @forceWxThread
     def SetData(self, data):
         List.SetData(self, data)
-        data = [(modification.id, (), modification, ModificationItem) for modification in data]
+        data = [(modification.id, (), modification, ModificationItem) for modification in data if modification.name != "swift-url"]
         
         if len(data) > 0:
             self.list.SetData(data)

@@ -1,3 +1,4 @@
+from Tribler.dispersy.encoding import encode, decode
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.community import Community
 from Tribler.dispersy.conversion import DefaultConversion
@@ -13,9 +14,10 @@ from Tribler.dispersy.message import Message, DelayMessageByProof
 from Tribler.dispersy.resolution import LinearResolution
 from Tribler.dispersy.destination import CommunityDestination
 
-from conversion import JSONConversion
+from conversion import StructConversion
 import numpy as np
 import os
+from struct import pack, unpack_from
 from collections import deque
 
 from payload import MessagePayload, GossipMessage
@@ -45,7 +47,7 @@ if __debug__:
 class GossipLearningCommunity(Community):
     @classmethod
     def get_master_members(cls):
-        master_key = "3081a7301006072a8648ce3d020106052b810400270381920004039a2b5690996f961998e72174a9cf3c28032de6e50c810cde0c87cdc49f1079130f7bcb756ee83ebf31d6d118877c2e0080c0eccfc7ea572225460834298e68d2d7a09824f2f0150718972591d6a6fcda45e9ac854d35af1e882891d690b2b2aa335203a69f09d5ee6884e0e85a1f0f0ae1e08f0cf7fbffd07394a0dac7b51e097cfebf9a463f64eeadbaa0c26c0660".decode("HEX")
+        master_key = "3081a7301006072a8648ce3d020106052b810400270381920004067442a42d2b5c0ee36a9d17237ebb4c3032f16815d16f57a0aac0c4ef6bf344b61060ab64e2b4ca4ba7502e5a5388e208e4a7e807203540c61830a4f4d2bd93d14ac210207f574a045ed249e8396a99b687e4209af910d15ed2e704e503164b38c337c31276184eb8bb6941f06d98f54204645605f2b2fadbab3a8059535b6dbd6bb721e40222a712b9141098838c3f".decode("HEX")
         master = Member(master_key)
         return [master]
 
@@ -84,12 +86,16 @@ class GossipLearningCommunity(Community):
                 
                 for _id, x, y in self._database.execute(u"SELECT id, x, y FROM input"):
                     try:
-                        feats = np.loads(str(x))
+                        w_length = len(x)/4
+                        
+                        feats = np.array(list(unpack_from(">%df" % w_length, x)))
                         self._id.append(_id)
                         self._x.append(feats)
                         self._y.append(int(y))
                     except:
                         print_exc()
+                        import sys
+                        print >> sys.stderr, x,y,_id
                         pass
         except:
             print_exc()
@@ -124,7 +130,7 @@ class GossipLearningCommunity(Community):
 
     def initiate_conversions(self):
         return [DefaultConversion(self),
-                JSONConversion(self)]
+                StructConversion(self)]
 
     def send_messages(self, messages):
         meta = self.get_meta_message(u"modeldata")
@@ -247,16 +253,28 @@ class GossipLearningCommunity(Community):
         are consistent with that of loaded in script.py. self._x should be a list
         of lists of floats. self._y should be a list of ints.
         """
+        
+        encoded_ndarray = "".join(pack(">f", f) for f in feats)
+        import sys
+        print >> sys.stderr, len(encoded_ndarray), len(feats)
+        
+        assert len(encoded_ndarray) > 1
+        
         if _id in self._id:
             index = self._id.index(_id)
             self._x[index] = feats
             self._y[index] = 1 if is_spam else 0
-            self._database.execute(u"UPDATE input SET x = ? AND y = ? WHERE id = ?",(buffer(feats.dumps()), 1 if is_spam else 0, _id))
+            
+            print >> sys.stderr, (str(buffer(encoded_ndarray)), 1 if is_spam else 0, _id)
+            
+            #self._database.execute(u"UPDATE input SET x = ? AND y = ? WHERE id = ?",
+            #                       )
         else:
             self._id.append(_id)
             self._x.append(feats)
             self._y.append(1 if is_spam else 0)
-            self._database.execute(u"INSERT INTO input (id, x, y) VALUES (?, ?, ?)",(_id, buffer(feats.dumps()), 1 if is_spam else 0))
+            self._database.execute(u"INSERT INTO input (id, x, y) VALUES (?, ?, ?)",
+                                   (_id, buffer(encoded_ndarray), 1 if is_spam else 0))
             
         self.update(self._model_queue[-1])
         
