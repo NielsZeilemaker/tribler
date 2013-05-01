@@ -31,8 +31,8 @@ import py2exe
 #
 ################################################################
 
-mainfile = os.path.join('Tribler','Main','tribler.py')
-progicofile = os.path.join('Tribler','Images','tribler.ico')
+mainfile = os.path.join('Tribler', 'Main', 'tribler.py')
+progicofile = os.path.join('Tribler', 'Images', 'tribler.ico')
 
 target = {
     "script": mainfile,
@@ -40,18 +40,18 @@ target = {
 }
 
 # gui panels to include (=those not found by py2exe from imports)
-includePanels=[
+includePanels = [
       "TopSearchPanel", "home", "list", "settingsDialog", "bgPanel"
 ]
 
-#packages = ["Tribler.Core","encodings"] + ["Tribler.Main.vwxGUI.%s" % x for x in includePanels]
-packages = ["encodings"] + ["Tribler.Main.vwxGUI.%s" % x for x in includePanels] + ["Tribler.Core.DecentralizedTracking.pymdht.core"]
+# packages = ["Tribler.Core","encodings"] + ["Tribler.Main.vwxGUI.%s" % x for x in includePanels]
+packages = ["encodings"] + ["Tribler.Main.vwxGUI.%s" % x for x in includePanels] + ["Tribler.Core.DecentralizedTracking.pymdht.core"] + ["scipy.sparse.csgraph._validation"] + ["sklearn.utils.weight_vector"]
 
 setup(
 #    (Disabling bundle_files for now -- apparently causes some issues with Win98)
 #    options = {"py2exe": {"bundle_files": 1}},
 #    zipfile = None,
-    options = {"py2exe": {"packages": packages,"optimize": 2}},
-    data_files = [("installdir",[])],
-    windows = [target],
+    options={"py2exe": {"packages": packages, "optimize": 2}},
+    data_files=[("installdir", [])],
+    windows=[target],
 )
