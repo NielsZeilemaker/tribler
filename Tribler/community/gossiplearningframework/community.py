@@ -24,7 +24,7 @@ from payload import MessagePayload, GossipMessage
 from models.logisticregression import LogisticRegressionModel
 from models.adalineperceptron import AdalinePerceptronModel
 from models.p2pegasos import P2PegasosModel
-from Tribler.community.gossiplearningframework.youtube_classifier.features import create_features,\
+from Tribler.community.gossiplearningframework.youtube_classifier.features import create_features, \
     load_words
 from Tribler.community.gossiplearningframework.youtube_classifier.dict_vectorizer import DictVectorizer
 from Tribler.community.gossiplearningframework.database import GossipDatabase
@@ -33,13 +33,13 @@ import cPickle
 from Tribler import LIBRARYNAME
 
 # Send messages every 1 seconds.
-DELAY=1.0
+DELAY = 1.0
 
 # Start after 15 seconds.
-INITIALDELAY=15.0
+INITIALDELAY = 15.0
 
 # Model queue size.
-MODEL_QUEUE_SIZE=10
+MODEL_QUEUE_SIZE = 10
 
 if __debug__:
     from Tribler.dispersy.dprint import dprint
@@ -64,38 +64,36 @@ class GossipLearningCommunity(Community):
     def __init__(self, master):
         super(GossipLearningCommunity, self).__init__(master)
         if __debug__: dprint('gossiplearningcommunity ' + self._cid.encode("HEX"))
-        
+
         load_words()
-        
+
         db_dir = os.path.join(LIBRARYNAME, 'community', 'gossiplearningframework', 'dictvectorizer.pickle')
         self._dict_vectorizer = cPickle.load(open(db_dir, "rb"))
-        
+
         self._database = GossipDatabase.get_instance(self._dispersy)
-        
+
         # These should be loaded from a database, x and y are stored only locally
         self._id = None
         self._x = None
         self._y = None
-        
+
         try:
             nr_local_records = self._database.execute(u"SELECT count(*) FROM input").next()
             if nr_local_records[0]:
                 self._id = []
                 self._x = []
                 self._y = []
-                
+
                 for _id, x, y in self._database.execute(u"SELECT id, x, y FROM input"):
                     try:
-                        w_length = len(x)/4
-                        
+                        w_length = len(x) / 4
+
                         feats = np.array(list(unpack_from(">%df" % w_length, x)))
                         self._id.append(_id)
                         self._x.append(feats)
                         self._y.append(int(y))
                     except:
                         print_exc()
-                        import sys
-                        print >> sys.stderr, x,y,_id
                         pass
         except:
             print_exc()
@@ -109,21 +107,21 @@ class GossipLearningCommunity(Community):
         # initmodel = LogisticRegressionModel()
         initmodel = P2PegasosModel()
         self._model_queue.append(initmodel)
-        
+
         # Periodically we will send our data to other node(s).
         self._dispersy.callback.register(self.active_thread, delay=INITIALDELAY)
-        
+
         if self._x and self._y:
             self.update(initmodel)
 
     def initiate_meta_messages(self):
         """Define the messages we will be using."""
         return [Message(self, u"modeldata",
-                MemberAuthentication(encoding="sha1"), # Only signed with the owner's SHA1 digest
+                MemberAuthentication(encoding="sha1"),  # Only signed with the owner's SHA1 digest
                 PublicResolution(),
                 DirectDistribution(),
 #                FullSyncDistribution(), # Full gossip
-                CommunityDestination(node_count=1), # Reach only one node each time.
+                CommunityDestination(node_count=1),  # Reach only one node each time.
                 MessagePayload(),
                 self.check_model,
                 self.on_receive_model)]
@@ -145,7 +143,7 @@ class GossipLearningCommunity(Community):
                                            distribution=(self.global_time,),
                                            payload=(message,)))
         # if __debug__: dprint("GOSSIP: calling self._dispersy.store_update_forward(%s, store = False, update = False, forward = True)." % send_messages)
-        self._dispersy.store_update_forward(send_messages, store = False, update = False, forward = True)
+        self._dispersy.store_update_forward(send_messages, store=False, update=False, forward=True)
 
     def active_thread(self):
         """
@@ -167,7 +165,7 @@ class GossipLearningCommunity(Community):
                 if not type(age) == int or age < 0:
                     yield DropMessage(message, "Age must be a nonnegative integer in this protocol.")
                 else:
-                    yield message # Accept message.
+                    yield message  # Accept message.
             else:
                 yield DropMessage(message, "Message must be a Gossip Message.")
 
@@ -228,72 +226,66 @@ class GossipLearningCommunity(Community):
         """
         this_X = np.array([(None, text, None)])
         feats = create_features(this_X, None)
-       
+
         """
         2. Vectorize the feature dictionary using the deserialized
         DictVectorizer's transform function.
         """
         feats = self._dict_vectorizer.transform(feats)[0]
-        
+
         """
         3. We need to update self._x and self._y. Make sure they are lists and not
         None (None semantically means they are not yet initialized, used in
         script.py).
         """
-        
+
         if self._id == None:
             self._id = []
         if self._x == None:
             self._x = []
         if self._y == None:
             self._y = []
-        
+
         """
         4. Append the new data point to self._x and self._y. Make sure the types
         are consistent with that of loaded in script.py. self._x should be a list
         of lists of floats. self._y should be a list of ints.
         """
-        
+
         encoded_ndarray = "".join(pack(">f", f) for f in feats)
-        import sys
-        print >> sys.stderr, len(encoded_ndarray), len(feats)
-        
         assert len(encoded_ndarray) > 1
-        
+
         if _id in self._id:
             index = self._id.index(_id)
             self._x[index] = feats
             self._y[index] = 1 if is_spam else 0
-            
-            print >> sys.stderr, (str(buffer(encoded_ndarray)), 1 if is_spam else 0, _id)
-            
-            #self._database.execute(u"UPDATE input SET x = ? AND y = ? WHERE id = ?",
-            #                       )
+            self._database.execute(u"UPDATE input SET x = ?, y = ? WHERE id = ?",
+                                   (buffer(encoded_ndarray), 1 if is_spam else 0, _id))
         else:
             self._id.append(_id)
             self._x.append(feats)
             self._y.append(1 if is_spam else 0)
             self._database.execute(u"INSERT INTO input (id, x, y) VALUES (?, ?, ?)",
                                    (_id, buffer(encoded_ndarray), 1 if is_spam else 0))
-            
+
         self.update(self._model_queue[-1])
-        
+
     def predict_input(self, text):
         """Returns True if TEXT is spam"""
         assert isinstance(text, unicode)
-        
+
         """
         1. Create features for text using create_features (same as step 2 above).
         """
         this_X = np.array([(None, text, None)])
         feats = create_features(this_X, None)
-        
+
         """
         2. Vectorize the feature dictionary using the deserialized
         DictVectorizer's transform function (same as step 2 above).
         """
         feats = self._dict_vectorizer.transform(feats)[0]
-        
+
         """
         3. Use self.predict(x) to predict for a vector x. The learning is done by
         periodically exchanging models in the background.
