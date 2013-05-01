@@ -166,6 +166,10 @@ Section "!Main EXE" SecMain
  CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework"
  CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier"
  CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db"
+ CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db\corp"
+ CreateDirectory "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words"
+ SetOutPath "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words"
+ File Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words\*.*
  SetOutPath "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db"
  File Tribler\community\gossiplearningframework\youtube_classifier\db\*.txt
  SetOutPath "$INSTDIR\Tribler\community\gossiplearningframework\youtube_classifier\db"

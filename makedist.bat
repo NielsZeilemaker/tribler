@@ -141,6 +141,7 @@ mkdir dist\installdir\Tribler\Category
 copy Tribler\Category\category.conf dist\installdir\Tribler\Category
 copy Tribler\Category\filter_terms.filter dist\installdir\Tribler\Category
 mkdir dist\installdir\Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words
+copy Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words\*.* dist\installdir\Tribler\community\gossiplearningframework\youtube_classifier\db\corp\word_list_dirty_words
 copy Tribler\community\gossiplearningframework\youtube_classifier\db\*.txt dist\installdir\Tribler\community\gossiplearningframework\youtube_classifier\db
 copy Tribler\community\gossiplearningframework\youtube_classifier\db\*.json dist\installdir\Tribler\community\gossiplearningframework\youtube_classifier\db
 copy Tribler\community\gossiplearningframework\*.pickle dist\installdir\Tribler\community\gossiplearningframework
