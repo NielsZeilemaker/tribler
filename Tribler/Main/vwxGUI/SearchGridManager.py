@@ -1416,8 +1416,8 @@ class ChannelManager:
             for community in self.dispersy.get_communities():
                 if isinstance(community, GossipLearningCommunity):
                     self._gossip_community = community
-        
-        return self._gossip_community.predict_input(modification.value)
+
+        return 1 if self._gossip_community.predict_input(modification.value) else 0
 
     def _createModifications(self, hits):
         returnList = []

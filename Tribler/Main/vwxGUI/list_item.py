@@ -931,12 +931,12 @@ class ModificationActivityItem(AvantarItem):
             button.Bind(wx.EVT_BUTTON, self.ShowTorrent)
             self.additionalButtons.append(button)
 
-        hg = HorizontalGradientGauge(self, -1, 1 - modification.getScore)
+        hg = HorizontalGradientGauge(self, -1, modification.getScore)
         hg.SetMinSize((100, -1))
         if modification.getScore < 0.5:
-            hg.SetToolTipString('We think this is not spam')
-        else:
             hg.SetToolTipString('This is possibly spam')
+        else:
+            hg.SetToolTipString('We think this is not spam')
         self.additionalButtons.append(hg)
 
         im = IconsManager.getInstance()
@@ -997,12 +997,12 @@ class ModificationItem(AvantarItem):
                 button.Bind(wx.EVT_BUTTON, self.RevertModification)
                 self.additionalButtons.append(button)
 
-        hg = HorizontalGradientGauge(self, -1, 1 - modification.getScore)
+        hg = HorizontalGradientGauge(self, -1, modification.getScore)
         hg.SetMinSize((100, -1))
         if modification.getScore < 0.5:
-            hg.SetToolTipString('We think this is not spam')
-        else:
             hg.SetToolTipString('This is possibly spam')
+        else:
+            hg.SetToolTipString('We think this is not spam')
         self.additionalButtons.append(hg)
 
         AvantarItem.AddComponents(self, leftSpacer, rightSpacer)
