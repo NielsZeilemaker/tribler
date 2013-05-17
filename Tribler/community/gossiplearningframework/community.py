@@ -113,6 +113,25 @@ class GossipLearningCommunity(Community):
 
         if self._x and self._y:
             self.update(initmodel)
+            self.export_input('current_model.txt')
+
+
+    def export_input(self, filename):
+        f = open(filename, "wb")
+        print >> f, "# community_id y value"
+
+        for dispersy_id, x, y in list(self._database.execute(u"SELECT id, x, y FROM input")):
+            try:
+                packet, community_id = self._dispersy.database.execute(u"SELECT packet, community FROM sync WHERE id = ?", (dispersy_id,)).next()
+            except StopIteration:
+                raise RuntimeError("Unknown dispersy_id %d" % dispersy_id)
+
+            message = self._dispersy.convert_packet_to_message(str(packet))
+            if message:
+                if message.name == u"modification":
+                    print >> f, community_id, y, message.payload.modification_value.encode("UTF-8", errors='replace')
+
+        f.close()
 
     def initiate_meta_messages(self):
         """Define the messages we will be using."""
