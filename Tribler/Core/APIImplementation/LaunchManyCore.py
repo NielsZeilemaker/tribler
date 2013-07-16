@@ -12,7 +12,8 @@ import time as timemod
 from threading import Event, Thread, enumerate as enumerate_threads, currentThread
 from traceback import print_exc, print_stack
 import traceback
-from Tribler.community.gossiplearningframework.community import GossipLearningCommunity
+from Tribler.community.gossiplearningframework.community import GossipLearningCommunity, \
+    StaticGossipLearningCommunity
 try:
     prctlimported = True
     import prctl
@@ -179,7 +180,7 @@ class TriblerLaunchMany(Thread):
             if swift_exists:
                 self.spm = SwiftProcessMgr(config['swiftpath'], config['swiftcmdlistenport'], config['swiftdlsperproc'], self.session.get_swift_tunnel_listen_port(), self.sesslock)
                 try:
-                    self.swift_process = self.spm.get_or_create_sp(self.session.get_swift_working_dir(),self.session.get_torrent_collecting_dir(),self.session.get_swift_tunnel_listen_port(), self.session.get_swift_tunnel_httpgw_listen_port(), self.session.get_swift_tunnel_cmdgw_listen_port() )
+                    self.swift_process = self.spm.get_or_create_sp(self.session.get_swift_working_dir(), self.session.get_torrent_collecting_dir(), self.session.get_swift_tunnel_listen_port(), self.session.get_swift_tunnel_httpgw_listen_port(), self.session.get_swift_tunnel_cmdgw_listen_port())
                 except OSError:
                     # could not find/run swift
                     print >> sys.stderr, "lmc: could not start a swift process"
@@ -285,7 +286,7 @@ class TriblerLaunchMany(Thread):
                 schedule.append((SearchCommunity, (self.session.dispersy_member,), {}))
                 # schedule.append((EffortCommunity, (self.swift_process,), {}))
                 schedule.append((AllChannelCommunity, (self.session.dispersy_member,), {}))
-                schedule.append((GossipLearningCommunity, (self.session.dispersy_member,), {}))
+                schedule.append((StaticGossipLearningCommunity, (self.session.dispersy_member,), {}))
                 schedule.append((ChannelCommunity, (), {}))
 
             for cls, args, kargs in schedule:
