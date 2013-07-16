@@ -614,12 +614,13 @@ class TorrentDetails(AbstractDetails):
             link.Bind(wx.EVT_LEFT_UP, lambda evt:  self.guiutility.showChannel(channel))
             self._add_row(panel, vSizer, 'Channel', link, flags=0)
 
-        if self.canEdit:
-            modifications = self.guiutility.channelsearch_manager.getTorrentModifications(self.torrent)
-            for modification in modifications:
-                if modification.name == 'swift-url':
-                    value = wx.TextCtrl(panel, -1, modification.value, style=wx.TE_READONLY)
-                    self._add_row(panel, vSizer, 'Swift URL', value)
+# Hiding this for IRT
+#         if self.canEdit:
+#             modifications = self.guiutility.channelsearch_manager.getTorrentModifications(self.torrent)
+#             for modification in modifications:
+#                 if modification.name == 'swift-url':
+#                     value = wx.TextCtrl(panel, -1, modification.value, style=wx.TE_READONLY)
+#                     self._add_row(panel, vSizer, 'Swift URL', value)
 
         thumb_dir = os.path.join(self.guiutility.utility.session.get_torrent_collecting_dir(), 'thumbs-' + binascii.hexlify(self.torrent.infohash))
         if os.path.isdir(thumb_dir) and len(os.listdir(thumb_dir)) > 0:
