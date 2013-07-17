@@ -23,7 +23,7 @@ translate = ""
 
 # All ABC Variables
 #######################
-title = "Tribler"
+title = "QMedia"
 
 superseederrornotcompleted = "Super-seed can only be enabled for completed torrents"
 superseedmustruntorrentbefore = "This torrent must be running before using Super-Seed mode"
