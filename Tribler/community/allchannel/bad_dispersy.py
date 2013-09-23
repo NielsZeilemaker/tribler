@@ -20,7 +20,7 @@ def disconnect(endpoints):
         endpoint.close()
 
 def start_attack(dispersy):
-    nr_endpoints = 2
+    nr_endpoints = 25
 
     # step 1, start creating some endpoints
     endpoints = [(dispersy.lan_address[1], dispersy.endpoint)]
