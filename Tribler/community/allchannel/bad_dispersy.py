@@ -8,8 +8,6 @@ def send_requests(community, candidate, endpoints):
         community.dispersy._lan_address = (community.dispersy._lan_address[0], lan_port)
         community.create_introduction_request(candidate, False)
 
-        yield 0.1
-
 def connect(dispersy, endpoints, nr_endpoints):
     for _ in range(1, nr_endpoints):
         endpoint = StandaloneEndpoint(endpoints[-1][0] + 1)
@@ -21,9 +19,7 @@ def disconnect(endpoints):
     for _, endpoint in endpoints:
         endpoint.close()
 
-def start_attack(dispersy):
-    nr_endpoints = 25
-
+def start_attack(dispersy, nr_endpoints=100):
     # step 1, start creating some endpoints
     endpoints = [(dispersy.lan_address[1], dispersy.endpoint)]
     connect(dispersy, endpoints, nr_endpoints)
@@ -37,7 +33,7 @@ def start_attack(dispersy):
             if candidate.sock_addr not in community._candidates:
                 community.old_add_candidate(candidate)
 
-                dispersy.callback.register(send_requests, (community, candidate, endpoints))
+                send_requests(community, candidate, endpoints)
 
     def on_intro_request(orig_handler, messages):
         for message in messages:
