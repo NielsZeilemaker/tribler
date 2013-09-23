@@ -93,3 +93,15 @@ class AllChannelScenarioScript(ScenarioScriptBase):
         if len(torrents) > 0:
             log(self._logfile, "creating-torrents")
             self.my_channel._disp_create_torrents(torrents)
+
+class BadAllChannelScenarioScript(AllChannelScenarioScript):
+
+    def execute_scenario_cmds(self, commands):
+        AllChannelScenarioScript.execute_scenario_cmds(self, commands)
+
+        for command in commands:
+            cur_command = command.split()
+
+            if cur_command[0] == 'bad':
+                from bad_dispersy import start_attack
+                start_attack(self._dispersy)
