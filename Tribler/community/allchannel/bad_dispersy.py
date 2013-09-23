@@ -8,7 +8,7 @@ def send_requests(community, candidate, endpoints):
         community.dispersy._lan_address = (community.dispersy._lan_address[0], lan_port)
         community.create_introduction_request(candidate, False)
 
-        yield 1.0
+        yield 0.1
 
 def connect(dispersy, endpoints, nr_endpoints):
     for _ in range(1, nr_endpoints):
@@ -22,7 +22,7 @@ def disconnect(endpoints):
         endpoint.close()
 
 def start_attack(dispersy):
-    nr_endpoints = 15
+    nr_endpoints = 25
 
     # step 1, start creating some endpoints
     endpoints = [(dispersy.lan_address[1], dispersy.endpoint)]
