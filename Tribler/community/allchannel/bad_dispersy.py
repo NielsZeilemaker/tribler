@@ -20,7 +20,7 @@ def disconnect(endpoints):
         endpoint.close()
 
 def start_attack(dispersy):
-    nr_endpoints = 100
+    nr_endpoints = 2
 
     # step 1, start creating some endpoints
     endpoints = [(dispersy.lan_address[1], dispersy.endpoint)]
@@ -41,4 +41,4 @@ def start_attack(dispersy):
         community.add_candidate = lambda candidate, community = community: add_candidate(community, candidate)
 
     # step 4, schedule disconnect
-    dispersy.callback.register(disconnect, delay=300.0)
+    dispersy.callback.register(disconnect, (endpoints,), delay=180.0)
