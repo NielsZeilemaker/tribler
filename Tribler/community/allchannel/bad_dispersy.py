@@ -21,7 +21,7 @@ class Attacker:
 
         # step 3, wrap add_candidate method for current communities
         def add_candidate(community, candidate):
-            if not isinstance(candidate, BootstrapCandidate):
+            if not isinstance(candidate, BootstrapCandidate) and not self.is_my_sibel(candidate):
                 if candidate.sock_addr not in community._candidates:
                     community.old_add_candidate(candidate)
 
@@ -64,10 +64,14 @@ class Attacker:
                 community.dispersy._lan_address = (community.dispersy._lan_address[0], cur_lanport)
                 community.dispersy._wan_address = (community.dispersy._wan_address[0], cur_wanport)
 
-                yield 2.5
+                yield 1.0
 
                 if self.disconnected:
                     break
+
+    def is_my_sibel(self, candidate):
+        his_port = candidate.lan_address[1]
+        return any(my_port == his_port for my_port, _, _ in self.endpoints)
 
     def connect(self):
         print >> sys.stderr, "creating endpoints"
