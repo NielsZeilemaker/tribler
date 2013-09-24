@@ -104,6 +104,4 @@ class BadAllChannelScenarioScript(AllChannelScenarioScript):
             cur_command = command.split()
 
             if cur_command[0] == 'bad':
-                import sys
-                print >> sys.stderr, "going rogue 2"
                 self.a = Attacker(self._dispersy)
