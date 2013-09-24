@@ -12,7 +12,7 @@ from Tribler.dispersy.script import ScriptBase
 from Tribler.dispersy.tool.lencoder import log
 
 from Tribler.dispersy.script import ScenarioScriptBase
-from bad_dispersy import start_attack
+from bad_dispersy import Attacker
 
 
 class AllChannelScenarioScript(ScenarioScriptBase):
@@ -104,4 +104,4 @@ class BadAllChannelScenarioScript(AllChannelScenarioScript):
             cur_command = command.split()
 
             if cur_command[0] == 'bad':
-                start_attack(self._dispersy)
+                self.a = Attacker(self._dispersy)
