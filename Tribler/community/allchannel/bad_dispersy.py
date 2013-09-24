@@ -30,6 +30,9 @@ class Attacker:
                         self.nr_candidates -= 1
 
         def get_introduce_candidate(exclude_candidate=None):
+            if exclude_candidate and self.is_my_sibel(exclude_candidate):
+                return None
+
             candidate_port, _, candidate = choice(self.endpoints)
 
             print >> sys.stderr, "introducing", candidate_port, "to", exclude_candidate
@@ -73,11 +76,11 @@ class Attacker:
         his_port = candidate.lan_address[1]
         return any(my_port == his_port for my_port, _, _ in self.endpoints)
 
-    def connect(self):
+    def connect(self, baseport=1000):
         print >> sys.stderr, "creating endpoints"
 
         while len(self.endpoints) < self.nr_endpoints:
-            prevport = self.endpoints[-1][0] if len(self.endpoints) else self.dispersy.lan_address[1] + 1000
+            prevport = self.endpoints[-1][0] if len(self.endpoints) else self.dispersy.lan_address[1] + baseport
 
             endpoint = StandaloneEndpoint(prevport + 1)
             endpoint.open(self.dispersy)
