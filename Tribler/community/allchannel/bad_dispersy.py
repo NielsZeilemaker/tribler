@@ -29,6 +29,8 @@ class Attacker:
 
         def get_introduce_candidate(exclude_candidate=None):
             _, _, candidate = choice(self.endpoints)
+
+            print >> sys.stderr, "introducing", candidate, "to", exclude_candidate
             return candidate
 
         for community in dispersy.get_communities():
@@ -53,6 +55,8 @@ class Attacker:
                 community.dispersy._wan_address = (community.dispersy._wan_address[0], lan_port)
 
                 community.create_introduction_request(candidate, False)
+
+                print >> sys.stderr, "sending request to", candidate, "from", lan_port
 
                 community.dispersy._endpoint = cur_endpoint
                 community.dispersy._lan_address = (community.dispersy._lan_address[0], cur_lanport)
