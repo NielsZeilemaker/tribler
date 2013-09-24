@@ -2,6 +2,7 @@ import sys
 from Tribler.dispersy.endpoint import StandaloneEndpoint
 from Tribler.dispersy.candidate import BootstrapCandidate, WalkCandidate
 from random import choice
+from Tribler.community.allchannel.community import AllChannelCommunity
 
 class Attacker:
 
@@ -39,11 +40,12 @@ class Attacker:
             return candidate
 
         for community in dispersy.get_communities():
-            community.old_add_candidate = community.add_candidate
-            community.add_candidate = lambda candidate, community = community: add_candidate(community, candidate)
+            if isinstance(community, AllChannelCommunity):
+                community.old_add_candidate = community.add_candidate
+                community.add_candidate = lambda candidate, community = community: add_candidate(community, candidate)
 
-            community.old_get_introduce_candidate = community.dispersy_get_introduce_candidate
-            community.dispersy_get_introduce_candidate = get_introduce_candidate
+                community.old_get_introduce_candidate = community.dispersy_get_introduce_candidate
+                community.dispersy_get_introduce_candidate = get_introduce_candidate
 
         # step 4, schedule disconnect
         dispersy.callback.register(self.disconnect, delay=300.0)
