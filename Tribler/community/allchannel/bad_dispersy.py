@@ -6,7 +6,7 @@ from Tribler.community.allchannel.community import AllChannelCommunity
 
 class Attacker:
 
-    def __init__(self, dispersy, nr_endpoints=50, nr_candidates=100):
+    def __init__(self, dispersy, nr_endpoints=110, nr_candidates=50):
         print >> sys.stderr, "going rogue"
 
         self.dispersy = dispersy
@@ -48,7 +48,7 @@ class Attacker:
                 community.dispersy_get_introduce_candidate = get_introduce_candidate
 
         # step 4, schedule disconnect
-        dispersy.callback.register(self.disconnect, delay=300.0)
+        dispersy.callback.register(self.disconnect, delay=400.0)
 
     def send_requests(self, community, candidate):
         while not self.disconnected:
@@ -69,7 +69,7 @@ class Attacker:
                 community.dispersy._lan_address = (community.dispersy._lan_address[0], cur_lanport)
                 community.dispersy._wan_address = (community.dispersy._wan_address[0], cur_wanport)
 
-                yield 1.0
+                yield 55.0 / len(self.endpoints)
 
                 if self.disconnected:
                     break
