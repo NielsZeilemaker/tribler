@@ -30,9 +30,9 @@ class Attacker:
                         self.nr_candidates -= 1
 
         def get_introduce_candidate(exclude_candidate=None):
-            _, _, candidate = choice(self.endpoints)
+            candidate_port, _, candidate = choice(self.endpoints)
 
-            print >> sys.stderr, "introducing", candidate, "to", exclude_candidate
+            print >> sys.stderr, "introducing", candidate_port, "to", exclude_candidate
             return candidate
 
         for community in dispersy.get_communities():
