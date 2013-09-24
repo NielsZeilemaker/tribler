@@ -6,6 +6,8 @@ from random import choice
 class Attacker:
 
     def __init__(self, dispersy, nr_endpoints=50, nr_candidates=100):
+        print >> sys.stderr, "going rogue"
+
         self.dispersy = dispersy
         self.nr_endpoints = nr_endpoints
         self.nr_candidates = nr_candidates
@@ -68,6 +70,8 @@ class Attacker:
                     break
 
     def connect(self):
+        print >> sys.stderr, "creating endpoints"
+
         while len(self.endpoints) < self.nr_endpoints:
             prevport = self.endpoints[-1][0] if len(self.endpoints) else self.dispersy.lan_address[1] + 1000
 
@@ -77,6 +81,7 @@ class Attacker:
             sock_addr = (self.dispersy.lan_address[0], endpoint._port)
             self.endpoints.append((endpoint._port, endpoint, WalkCandidate(sock_addr, False, sock_addr, sock_addr, u"public")))
 
+        print >> sys.stderr, "created endpoints"
         self.disconnected = False
 
     def disconnect(self):
