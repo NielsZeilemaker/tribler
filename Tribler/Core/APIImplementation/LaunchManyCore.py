@@ -120,7 +120,9 @@ class TriblerLaunchMany(Thread):
                 else:
                     endpoint = RawserverEndpoint(self.rawserver, self.session.get_dispersy_port())
 
-                callback = Callback("Dispersy")  # WARNING NAME SIGNIFICANT
+                # callback = Callback("Dispersy")  # WARNING NAME SIGNIFICANT
+                from Tribler.Core.APIImplementation.TwistedCallback import TwistedCallback
+                callback = TwistedCallback("Dispersy")
                 working_directory = unicode(self.session.get_state_dir())
 
                 self.dispersy = Dispersy(callback, endpoint, working_directory)
