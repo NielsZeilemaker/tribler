@@ -1,14 +1,14 @@
 import sys
+from collections import defaultdict
+from time import time
 
 from Tribler.dispersy.callback import Callback
 from twisted.internet import reactor
 from threading import Thread, RLock, Event
 from twisted.internet.task import deferLater
-from twisted.internet.threads import blockingCallFromThread
 from types import GeneratorType
 from twisted.internet.defer import inlineCallbacks, returnValue, DeferredList, \
     CancelledError
-from time import time
 
 class TwistedCallback(Callback):
 
@@ -28,7 +28,7 @@ class TwistedCallback(Callback):
         self._lock = RLock()
         self._task_lock = RLock()
 
-        self._current_tasks = []
+        self._current_tasks = defaultdict(list)
 
     def start(self, wait=True):
         self._thread.start()
@@ -47,15 +47,16 @@ class TwistedCallback(Callback):
         gList = []
         with self._task_lock:
             now = time()
-            for _, scheduled, d, g in self._current_tasks:
-                if g:
-                    gList.append(g)
+            for tasklist in self._current_tasks.values():
+                for scheduled_at, d, g in tasklist:
+                    if g:
+                        gList.append(g)
 
-                elif scheduled < now:
-                    dList.append(d)
+                    elif scheduled_at < now:
+                        dList.append(d)
 
-                else:
-                    d.cancel()
+                    else:
+                        d.cancel()
 
         d = DeferredList(dList)
         d.addCallback(stop_generators)
@@ -89,21 +90,15 @@ class TwistedCallback(Callback):
     def is_finished(self):
         return not self.is_running
 
-    def remove_deferred(self, d):
+    def remove_deferred(self, id_, d):
         with self._task_lock:
-            for i, call in enumerate(self._current_tasks):
-                if call[2] == d:
+            for i, call in enumerate(self._current_tasks[id_]):
+                if call[1] == d:
                     self._current_tasks.pop(i)
                     break
 
-    def get_id_position(self, id_):
-        with self._task_lock:
-            for i, call in enumerate(self._current_tasks):
-                if call[0] == id_:
-                    return i
-
     def has_id_scheduled(self, id_):
-        return self.get_id_position(id_) != None
+        return id_ in self._current_tasks
 
     def handle_exception(self, failure):
         if failure.check(CancelledError) == None:
@@ -125,12 +120,12 @@ class TwistedCallback(Callback):
 
             if not self._stopping:
                 d = deferLater(reactor, delay, self.wrapped_call, id_, call, args + (id_,) if include_id else args, kargs or {})
-                self._current_tasks.append([id_, time() + delay, d, None])
+                self._current_tasks[id_].append([time() + delay, d, None])
 
                 if callback:
                     d.addCallback(lambda *_: callback(*callback_args, **callback_kargs))
                 d.addErrback(self.handle_exception)
-                d.addBoth(lambda *_: self.remove_deferred(d))
+                d.addBoth(lambda id_=id_: self.remove_deferred(id_, d))
 
             return id_
 
@@ -145,14 +140,16 @@ class TwistedCallback(Callback):
 
     def unregister(self, id_, cancel=True):
         with self._task_lock:
-            cur_pos = self.get_id_position(id_)
-            if cur_pos != None:
-                call = self._current_tasks.pop(cur_pos)
+            if self.has_id_scheduled(id_):
+                tasks = self._current_tasks[id_]
+                del self._current_tasks[id_]
+
                 if cancel:
-                    if call[3]:
-                        call[3].close()
-                    elif call[2]:
-                        call[2].cancel()
+                    for call in tasks:
+                        if call[2]:
+                            call[2].close()
+                        elif call[1]:
+                            call[1].cancel()
 
     def call(self, call, args=(), kargs=None, priority=0, id_=u"", include_id=False, timeout=0.0, default=None):
         if not self._stopping:
@@ -189,12 +186,15 @@ class TwistedCallback(Callback):
         if isinstance(result, GeneratorType):
             # we only received the generator, no actual call has been made to the
             # function yet, therefore we call it again immediately
+
+            # register generator at id_
             with self._lock:
-                cur_pos = self.get_id_position(id_)
-                if cur_pos != None:
-                    self._current_tasks[cur_pos][3] = result
+                for call in self._current_tasks[id_]:
+                    call[2] = result
+                    break
+
                 else:
-                    self._current_tasks.append([id_, 0, None, result])
+                    self._current_tasks[id_].append([0, None, result])
 
             while True:
                 try:
