@@ -8,6 +8,8 @@ from math import ceil
 from hashlib import md5
 from itertools import groupby
 from binascii import hexlify
+from collections import namedtuple
+from payload import *
 
 from Tribler.dispersy.authentication import MemberAuthentication, \
     NoAuthentication
@@ -25,19 +27,16 @@ from Tribler.dispersy.resolution import PublicResolution
 from Tribler.dispersy.requestcache import Cache, NumberCache
 from Tribler.dispersy.script import assert_
 
-from payload import *
+
 from conversion import ForwardConversion, PSearchConversion, \
     HSearchConversion, PoliSearchConversion
 
-from crypto.paillier import paillier_add, paillier_init, paillier_encrypt, paillier_decrypt, \
+from Tribler.community.privatesemantic.crypto.paillier import paillier_add, paillier_init, paillier_encrypt, paillier_decrypt, \
     paillier_polyval, paillier_multiply, paillier_add_unenc
-from crypto.rsa import rsa_init, rsa_encrypt, rsa_decrypt, rsa_compatible, hash_element
-from crypto.polycreate import compute_coeff, polyval
-from collections import namedtuple
+from Tribler.community.privatesemantic.crypto.rsa import rsa_init, rsa_encrypt, rsa_decrypt, rsa_compatible, hash_element
+from Tribler.community.privatesemantic.crypto.polycreate import compute_coeff, polyval
 from Tribler.community.privatesemantic.database import SemanticDatabase
-from Tribler.community.privatesemantic.payload import SimiRevealPayload
-from Tribler.community.privatesemantic.conversion import bytes_to_long, \
-    long_to_bytes
+from Tribler.community.privatesemantic.conversion import bytes_to_long, long_to_bytes
 
 DEBUG = False
 DEBUG_VERBOSE = False

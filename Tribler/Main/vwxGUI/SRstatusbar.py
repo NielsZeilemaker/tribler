@@ -13,7 +13,7 @@ from Tribler.Main.vwxGUI import warnWxThread
 
 class SRstatusbar(wx.StatusBar):
 
-    def __init__(self, parent):
+    def __init__(self, parent, show_ff=True):
         wx.StatusBar.__init__(self, parent, style=wx.ST_SIZEGRIP)
 
         # On Linux/OS X the resize handle and icons overlap, therefore we add an extra field.
@@ -26,21 +26,27 @@ class SRstatusbar(wx.StatusBar):
         self.utility = self.guiutility.utility
         self.library_manager = self.guiutility.library_manager
         self.uelog = UserEventLogDBHandler.getInstance()
+        self.show_ff = show_ff
 
-        self.ff_checkbox = wx.CheckBox(self, -1, 'Family filter', style=wx.ALIGN_RIGHT)
-        self.ff_checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckbox)
-        self.ff_checkbox.SetValue(self.guiutility.getFamilyFilter())
+        if self.show_ff:
+            self.ff_checkbox = wx.CheckBox(self, -1, 'Family filter', style=wx.ALIGN_RIGHT)
+            self.ff_checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckbox)
+            self.ff_checkbox.SetValue(self.guiutility.getFamilyFilter())
 
-        self.speed_down_icon = NativeIcon.getInstance().getBitmap(self, 'arrow', self.GetBackgroundColour(), state=0)
-        self.speed_down_sbmp = wx.StaticBitmap(self, -1, self.speed_down_icon)
-        self.speed_down_sbmp.Bind(wx.EVT_RIGHT_UP, self.OnDownloadPopup)
-        self.speed_down = StaticText(self, -1, '', style=wx.ST_NO_AUTORESIZE)
-        self.speed_down.Bind(wx.EVT_RIGHT_UP, self.OnDownloadPopup)
-        self.speed_up_icon = self.speed_down_icon.ConvertToImage().Rotate90().Rotate90().ConvertToBitmap()
-        self.speed_up_sbmp = wx.StaticBitmap(self, -1, self.speed_up_icon)
-        self.speed_up_sbmp.Bind(wx.EVT_RIGHT_UP, self.OnUploadPopup)
-        self.speed_up = StaticText(self, -1, '', style=wx.ST_NO_AUTORESIZE)
-        self.speed_up.Bind(wx.EVT_RIGHT_UP, self.OnUploadPopup)
+        if self.library_manager:
+            self.speed_down_icon = NativeIcon.getInstance().getBitmap(self, 'arrow', self.GetBackgroundColour(), state=0)
+            self.speed_down_sbmp = wx.StaticBitmap(self, -1, self.speed_down_icon)
+            self.speed_down_sbmp.Bind(wx.EVT_RIGHT_UP, self.OnDownloadPopup)
+            self.speed_down = StaticText(self, -1, '', style=wx.ST_NO_AUTORESIZE)
+            self.speed_down.Bind(wx.EVT_RIGHT_UP, self.OnDownloadPopup)
+            self.speed_up_icon = self.speed_down_icon.ConvertToImage().Rotate90().Rotate90().ConvertToBitmap()
+            self.speed_up_sbmp = wx.StaticBitmap(self, -1, self.speed_up_icon)
+            self.speed_up_sbmp.Bind(wx.EVT_RIGHT_UP, self.OnUploadPopup)
+            self.speed_up = StaticText(self, -1, '', style=wx.ST_NO_AUTORESIZE)
+            self.speed_up.Bind(wx.EVT_RIGHT_UP, self.OnUploadPopup)
+            self.SetTransferSpeeds(0, 0)
+
+            self.library_manager.add_download_state_callback(self.RefreshTransferSpeed)
 
         self.searchConnectionImages = ['progressbarEmpty.png', 'progressbarFull.png']
         self.searchConnectionImages = [os.path.join(self.guiutility.vwxGUI_path, 'images', image) for image in self.searchConnectionImages]
@@ -64,10 +70,7 @@ class SRstatusbar(wx.StatusBar):
         self.firewallStatus.Enable(False)
         self.firewallStatus.SetBitmapDisabled(self.bmp_firewall_warning)
 
-        self.SetTransferSpeeds(0, 0)
         self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        self.library_manager.add_download_state_callback(self.RefreshTransferSpeed)
 
     def RefreshTransferSpeed(self, dslist, magnetlist):
         total_down, total_up = 0.0, 0.0
@@ -204,17 +207,19 @@ class SRstatusbar(wx.StatusBar):
     def Reposition(self):
         self.Freeze()
 
-        rect = self.GetFieldRect(0)
-        self.ff_checkbox.SetPosition((rect.x + 2, rect.y + 2))
-        self.ff_checkbox.SetSize((-1, rect.height - 4))
+        if self.show_ff:
+            rect = self.GetFieldRect(0)
+            self.ff_checkbox.SetPosition((rect.x + 2, rect.y + 2))
+            self.ff_checkbox.SetSize((-1, rect.height - 4))
 
-        rect = self.GetFieldRect(1)
-        x = rect.x + rect.width - 15
-        for control in reversed([self.speed_down_sbmp, self.speed_down, self.speed_up_sbmp, self.speed_up]):
-            spacer = 10 if not isinstance(control, wx.StaticBitmap) else 7
-            x -= control.GetSize()[0] + spacer
-            yAdd = (rect.height - control.GetSize()[1]) / 2
-            control.SetPosition((x, rect.y + yAdd))
+        if self.library_manager:
+            rect = self.GetFieldRect(1)
+            x = rect.x + rect.width - 15
+            for control in reversed([self.speed_down_sbmp, self.speed_down, self.speed_up_sbmp, self.speed_up]):
+                spacer = 10 if not isinstance(control, wx.StaticBitmap) else 7
+                x -= control.GetSize()[0] + spacer
+                yAdd = (rect.height - control.GetSize()[1]) / 2
+                control.SetPosition((x, rect.y + yAdd))
 
         rect = self.GetFieldRect(2)
         size = self.connection.GetSize()

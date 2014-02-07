@@ -2220,9 +2220,9 @@ class ActivitiesList(List):
         self.Layout()
         self.guiutility.frame.Bind(wx.EVT_SIZE, self.OnSize)
         _set_font(self.list, size_increment=2)
-        wx.CallAfter(self.__SetData)
+        wx.CallAfter(self._SetData)
 
-    def __SetData(self):
+    def _SetData(self):
         self.list.SetData([(1, ['Home'], None, ActivityListItem), (2, ['Results'], None, ActivityListItem), (3, ['Channels'], None, ActivityListItem),
                            (4, ['Downloads'], None, ActivityListItem), (5, ['Videoplayer'], None, ActivityListItem)])
         self.ResizeListItems()

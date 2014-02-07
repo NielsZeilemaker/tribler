@@ -35,6 +35,8 @@ class TopSearchPanelStub():
     def Layout(self):
         pass
 
+    def TorrentsChanged(self):
+        pass
 
 class TopSearchPanel(FancyPanel):
 

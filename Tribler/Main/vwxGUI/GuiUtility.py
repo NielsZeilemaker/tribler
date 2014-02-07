@@ -63,6 +63,11 @@ class GUIUtility:
 
         self.lists = []
 
+        self.torrentsearch_manager = None
+        self.channelsearch_manager = None
+        self.library_manager = None
+        self.torrentstate_manager = None
+
         from Tribler.Main.vwxGUI.widgets import NativeIcon
         from Tribler.Main.vwxGUI.list_header import ListHeaderIcon
         from Tribler.Main.vwxGUI.IconsManager import IconsManager

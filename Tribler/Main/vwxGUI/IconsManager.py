@@ -6,6 +6,7 @@ import os
 import cStringIO
 import logging
 
+from collections import defaultdict
 from Tribler.Core.API import *
 
 ICON_MAX_DIM = 80
@@ -29,7 +30,7 @@ class IconsManager:
         self.guiUtility = GUIUtility.getInstance()
         self.guiImagePath = os.path.join(self.guiUtility.utility.getPath(), 'Tribler', 'Main', 'vwxGUI', 'images')
 
-        self.defaults = {'PEER_THUMB': {}, 'TORRENT': {}, 'TORRENT_NEW': {}, 'MODIFICATION': {}, 'REVERTED_MODIFICATION': {}, 'COMMENT':{}, 'MARKING':{}}
+        self.defaults = defaultdict(dict)
         self.defaults['PEER_THUMB'][ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'defaultThumbPeer.png'))
         self.defaults['TORRENT'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'file_extension_tor.png'))
         self.defaults['TORRENT_NEW'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'file_extension_tornew.png'))
@@ -37,6 +38,10 @@ class IconsManager:
         self.defaults['REVERTED_MODIFICATION'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'edit_reverted.png'))
         self.defaults['COMMENT'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'comments.png'))
         self.defaults['MARKING'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'marking.png'))
+        self.defaults['ONLINE'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'status_online.png'))
+        self.defaults['OFFLINE'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'status_offline.png'))
+        self.defaults['THUMB_UP'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'thumb_up.png'))
+        self.defaults['THUMBNAIL'][SMALL_ICON_MAX_DIM] = wx.Bitmap(os.path.join(self.guiImagePath, 'thumbnail.png'))
 
         # Load country flags used by list_details
         self.country_flags = {}
