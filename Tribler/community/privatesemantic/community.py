@@ -309,8 +309,13 @@ class ForwardCommunity():
 
     def new_taste_buddy(self, tb):
         # if we have any similarity, cache peer
-        if tb.overlap and tb.should_cache():
-            self._peercache.add_peer(tb.overlap, *tb.candidate.sock_addr)
+        if tb.overlap:
+            if tb.should_cache():
+                self._peercache.add_peer(tb.overlap, *tb.candidate.sock_addr)
+                
+        if self._notifier:
+            from Tribler.Core.simpledefs import NTFY_ACT_MEET, NTFY_ACTIVITIES, NTFY_INSERT
+            self._notifier.notify(NTFY_ACTIVITIES, NTFY_INSERT, NTFY_ACT_MEET, "%s:%d" % tb.sock_addr, tb)
 
     def add_possible_taste_buddies(self, possibles):
         if __debug__:

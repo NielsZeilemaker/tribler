@@ -1,6 +1,6 @@
 from os import path
 from time import time
-
+from binascii import hexlify
 from Tribler.dispersy.database import Database
 
 LATEST_VERSION = 1
@@ -92,11 +92,11 @@ class FriendDatabase(Database):
         self.execute(u"INSERT INTO friends (name, key, keyhash) VALUES (?,?,?)", (_name, _key, _keyhash))
 
     def get_friend(self, name):
-        return self._converted_keys(self.execute(u"SELECT key, keyhash FROM friends WHERE name = ?", (unicode(name),))).next()
+        return self._converted_keys(self.execute(u"SELECT id, key, keyhash FROM friends WHERE name = ?", (unicode(name),))).next()
 
     def get_friend_by_hash(self, keyhash):
         _keyhash = buffer(str(keyhash))
-        return self._converted_keys(self.execute(u"SELECT key, keyhash FROM friends WHERE keyhash = ?", (_keyhash,))).next()
+        return self._converted_keys(self.execute(u"SELECT id, key, keyhash FROM friends WHERE keyhash = ?", (_keyhash,))).next()
 
     def get_friend_keys(self):
         return list(self._converted_keys(self.execute(u"SELECT name, key, keyhash FROM friends")))
@@ -120,3 +120,71 @@ class FriendDatabase(Database):
 
         if not did_yield:
             yield None, None
+
+LATEST_TEXT_VERSION = 1
+
+textschema = u"""
+CREATE TABLE posts(
+ from_id integer,
+ header text,
+ message text
+)
+CREATE TABLE option(key TEXT PRIMARY KEY, value BLOB);
+INSERT INTO option(key, value) VALUES('database_version', '""" + str(LATEST_TEXT_VERSION) + """');
+"""
+class TextDatabase(Database):
+    if __debug__:
+        __doc__ = textschema
+
+    def __init__(self, dispersy, friend_db):
+        self._dispersy = dispersy
+        self._friend_db = friend_db
+
+        if self._dispersy._database._file_path == u":memory:":
+            super(TextDatabase, self).__init__(u":memory:")
+        else:
+            super(TextDatabase, self).__init__(path.join(dispersy.working_directory, u"sqlite", u"textsync.db"))
+
+    def open(self):
+        self._dispersy.database.attach_commit_callback(self.commit)
+        return super(TextDatabase, self).open()
+
+    def close(self, commit=True):
+        self._dispersy.database.detach_commit_callback(self.commit)
+        return super(TextDatabase, self).close(commit)
+
+    def check_database(self, database_version):
+        assert isinstance(database_version, unicode)
+        assert database_version.isdigit()
+        assert int(database_version) >= 0
+        database_version = int(database_version)
+
+        # setup new database with current database_version
+        if database_version < 1:
+            self.executescript(textschema)
+            self.commit()
+
+        else:
+            # upgrade to version 2
+            if database_version < 2:
+                # there is no version 2 yet...
+                # if __debug__: dprint("upgrade database ", database_version, " -> ", 2)
+                # self.executescript(u"""UPDATE option SET value = '2' WHERE key = 'database_version';""")
+                # self.commit()
+                # if __debug__: dprint("upgrade database ", database_version, " -> ", 2, " (done)")
+                pass
+
+        return LATEST_TEXT_VERSION
+
+    def add_message(self, friendmid, text):
+        #mids are sha1(asfasf).digest(), we need to convert them to hex and then long
+        friendkeyhash = long(hexlify(friendmid),16)
+        friend_id,_,_ = self._friend_db.get_friend_by_hash(friendkeyhash)
+        
+        if text.startswith('/'):
+            if text.startswith('/post'):
+                _,header,message = text.split(' ', 2)
+                
+                header = unicode(header)
+                message = unicode(message)
+                self.execute(u"INSERT INTO posts (from_id, header, message) VALUES (?,?,?)", (friend_id, header, message)

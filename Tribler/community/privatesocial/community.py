@@ -31,21 +31,44 @@ from Tribler.community.privatesemantic.conversion import long_to_bytes
 from Tribler.community.privatesemantic.crypto.ecutils import OpenSSLCurves
 from Tribler.community.privatesemantic.crypto.ecelgamal import encrypt_str
 from Tribler.community.privatesemantic.crypto.elgamalcrypto import ElgamalCrypto
+from Tribler.community.privatesocial.database import TextDatabase
 
 DEBUG = False
 DEBUG_VERBOSE = False
 ENCRYPTION = True
 
 class SocialCommunity(Community):
+    
+    @classmethod
+    def get_master_members(cls, dispersy):
+#generated: Sun Feb 09 17:09:18 2014
+#curve: NID_sect571r1
+#len: 571 bits ~ 144 bytes signature
+#pub: 170 3081a7301006072a8648ce3d020106052b810400270381920004054fe4cf46de9e1b9fb3b64d91a3319b0c68e136a7ea87acb0b989e7637310c1f1e45db6c74d8207fa9da9cae937de9eb32ef96d97513cd586ce623f940b9895744bc4e40aea12ca046edcac02b1e9f850ee55a7195cecee8783012fdf1f0fd24dc501c4d99cedafa677fd494a01c04eefca8b52e87e3a99160009449bfe6baad88230b4e7445df60b9f2f2ee9f16b6a
+#pub-sha1 b9b0c066db8351d5e222a7859d8cc48709f20d55
+#-----BEGIN PUBLIC KEY-----
+#MIGnMBAGByqGSM49AgEGBSuBBAAnA4GSAAQFT+TPRt6eG5+ztk2RozGbDGjhNqfq
+#h6ywuYnnY3MQwfHkXbbHTYIH+p2pyuk33p6zLvltl1E81YbOYj+UC5iVdEvE5Arq
+#EsoEbtysArHp+FDuVacZXOzuh4MBL98fD9JNxQHE2Zztr6Z3/UlKAcBO78qLUuh+
+#OpkWAAlEm/5rqtiCMLTnRF32C58vLunxa2o=
+#-----END PUBLIC KEY-----
+        master_key = "3081a7301006072a8648ce3d020106052b810400270381920004054fe4cf46de9e1b9fb3b64d91a3319b0c68e136a7ea87acb0b989e7637310c1f1e45db6c74d8207fa9da9cae937de9eb32ef96d97513cd586ce623f940b9895744bc4e40aea12ca046edcac02b1e9f850ee55a7195cecee8783012fdf1f0fd24dc501c4d99cedafa677fd494a01c04eefca8b52e87e3a99160009449bfe6baad88230b4e7445df60b9f2f2ee9f16b6a".decode("HEX")
+        master = dispersy.get_member(master_key)
+        return [master]
+    
     def __init__(self, dispersy, master, integrate_with_tribler=True, encryption=ENCRYPTION, log_text=None):
         assert isinstance(dispersy.crypto, ElgamalCrypto)
 
         super(SocialCommunity, self).__init__(dispersy, master)
+        self.integrate_with_tribler = integrate_with_tribler
         self.encryption = bool(encryption)
         self.log_text = log_text
 
         self._friend_db = FriendDatabase(dispersy)
         self._friend_db.open()
+        
+        self._text_db = TextDatabase(dispersy, self._friend_db)
+        self._text_db.open()
 
         # never sync while taking a step, only sync with friends
         self._orig_send_introduction_request = self.send_introduction_request
@@ -61,6 +84,7 @@ class SocialCommunity(Community):
     def unload_community(self):
         super(SocialCommunity, self).unload_community()
         self._friend_db.close()
+        self._text_db.close()
 
     def initiate_meta_messages(self):
         # TODO replace with modified full sync
@@ -177,13 +201,15 @@ class SocialCommunity(Community):
         for message in messages:
             if self.log_text:
                 self.log_text("text-statistics", message.candidate.sock_addr, global_time=message._distribution.global_time + 1, created_by=message.authentication.member.mid.encode('hex'))
+                
+            self._text_db.add_message(message.authentication.member.mid, message.payload.text)
 
     def create_encrypted(self, message_str, dest_friend):
         assert isinstance(message_str, str)
         assert isinstance(dest_friend, str)
 
         # get key
-        key, keyhash = self._friend_db.get_friend(dest_friend)
+        _,key, keyhash = self._friend_db.get_friend(dest_friend)
 
         if key:
             # encrypt message
@@ -211,7 +237,7 @@ class SocialCommunity(Community):
 
             could_decrypt = False
             for key, keyhash in self._friend_db.get_my_keys():
-                if keyhash == message.payload._keyhash:
+                if keyhash == message.payload.keyhash:
                     decrypted_messages.append((message.candidate, self.dispersy.crypto.decrypt(key, message.payload.encrypted_message)))
                     could_decrypt = True
                     break
@@ -222,6 +248,21 @@ class SocialCommunity(Community):
 
         if decrypted_messages:
             self._dispersy.on_incoming_packets(decrypted_messages, cache=False)
+            
+    def add_friend(self, name, key):
+        keyhash = long(sha1(self._crypto.key_to_bin(key)).hexdigest(), 16)
+        self._mypref_db.addMyPreference(keyhash, {})
+        self._friend_db.add_friend(name, key, keyhash)
+        
+        return keyhash
+    
+    def get_friends(self):
+        my_friends = dict([(keyhash, [name, 0]) for name,_,keyhash in self._friend_db.get_friend_keys()])
+        for tb in self.yield_taste_buddies():
+            for keyhash, friend_tuple in my_friends:
+                if tb.does_overlap(keyhash):
+                    friend_tuple[1]+=1
+        return my_friends.values()
 
     def get_tbs_from_peercache(self, nr, nr_standins):
         tbs = [TasteBuddy(overlap, (ip, port)) for overlap, ip, port in self._peercache.get_peers()]
