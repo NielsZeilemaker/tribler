@@ -44,9 +44,6 @@ class SRstatusbar(wx.StatusBar):
             self.speed_up_sbmp.Bind(wx.EVT_RIGHT_UP, self.OnUploadPopup)
             self.speed_up = StaticText(self, -1, '', style=wx.ST_NO_AUTORESIZE)
             self.speed_up.Bind(wx.EVT_RIGHT_UP, self.OnUploadPopup)
-            self.SetTransferSpeeds(0, 0)
-
-            self.library_manager.add_download_state_callback(self.RefreshTransferSpeed)
 
         self.searchConnectionImages = ['progressbarEmpty.png', 'progressbarFull.png']
         self.searchConnectionImages = [os.path.join(self.guiutility.vwxGUI_path, 'images', image) for image in self.searchConnectionImages]
@@ -71,6 +68,10 @@ class SRstatusbar(wx.StatusBar):
         self.firewallStatus.SetBitmapDisabled(self.bmp_firewall_warning)
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
+        
+        if self.library_manager:
+            self.SetTransferSpeeds(0, 0)
+            self.library_manager.add_download_state_callback(self.RefreshTransferSpeed)
 
     def RefreshTransferSpeed(self, dslist, magnetlist):
         total_down, total_up = 0.0, 0.0
