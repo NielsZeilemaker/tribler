@@ -9,7 +9,6 @@ import threading
 import time
 from collections import defaultdict
 
-from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 
 from Tribler.community.anontunnel import crypto, extendstrategies, selectionstrategies, lengthstrategies
@@ -925,7 +924,7 @@ class ProxyCommunity(Community):
                 if circuit.ping_time_remaining < PING_INTERVAL
                 and circuit.candidate]
 
-            #self._logger.info("pinging %d circuits", len(to_be_pinged))
+            # self._logger.info("pinging %d circuits", len(to_be_pinged))
             for circuit in to_be_pinged:
                 self.create_ping(circuit.candidate, circuit)
         except Exception:

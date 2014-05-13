@@ -11,7 +11,6 @@ from Tribler.Core.simpledefs import dlstatus_strings
 from Tribler.Test.test_as_server import TestGuiAsServer, BASE_DIR
 from Tribler.dispersy.candidate import Candidate
 
-
 class TestAnonTunnelCommunity(TestGuiAsServer):
 
     def test_anon_download(self):
@@ -98,7 +97,11 @@ class TestAnonTunnelCommunity(TestGuiAsServer):
 
                 return proxy_community
 
+<<<<<<< HEAD
             return blockingCallFromThread(reactor, load_community, session)
+=======
+            self.community = blockingCallFromThread(reactor, load_community, session)
+>>>>>>> Port anontunnel community to twisted, not really tested.
 
         TestGuiAsServer.startTest(self, setup_proxies)
 
