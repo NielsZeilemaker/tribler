@@ -9,6 +9,7 @@ import threading
 import time
 from collections import defaultdict
 
+from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 
 from Tribler.community.anontunnel import crypto, extendstrategies, selectionstrategies, lengthstrategies
