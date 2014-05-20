@@ -955,11 +955,11 @@ class ChannelCommunity(Community):
                         if tormessage:
                             packets.append(tormessage.packet)
 
-                self._dispersy.statistics.dict_inc(self._dispersy.statistics.outgoing, u"missing-channel-response-snapshot", len(packets))
+                self.statistics.increase_msg_count(u"outgoing", u"missing-channel-response-snapshot", len(packets))
                 self._dispersy.endpoint.send([message.candidate], packets)
 
             else:
-                self._dispersy.statistics.dict_inc(self._dispersy.statistics.outgoing, u"missing-channel-response")
+                self.statistics.increase_msg_count(u"outgoing", u"missing-channel-response")
                 self._dispersy.endpoint.send([message.candidate], [channelmessage.packet])
 
 

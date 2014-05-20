@@ -259,9 +259,7 @@ class SearchCommunity(Community):
 
         logger.debug("%s %s sending introduction request to %s", self.cid.encode("HEX"), type(self), destination)
 
-        self._dispersy.statistics.walk_attempt += 1
-        if request.payload.advice:
-            self._dispersy.statistics.walk_advice_outgoing_request += 1
+        self._dispersy.statistics.walk_attempt_count += 1
 
         self._dispersy._forward([request])
         return request
@@ -436,7 +434,7 @@ class SearchCommunity(Community):
                 requested_packets.extend(self._get_packets_from_infohashes(cid, torrents))
 
             if requested_packets:
-                self._dispersy.statistics.dict_inc(self._dispersy.statistics.outgoing, u"torrent-response", len(requested_packets))
+                self.statistics.increase_msg_count(u"outgoing", u"torrent-response", len(requested_packets))
                 self._dispersy.endpoint.send([message.candidate], requested_packets)
 
             if DEBUG:

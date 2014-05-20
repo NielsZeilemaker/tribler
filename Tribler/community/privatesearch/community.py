@@ -514,7 +514,7 @@ class TTLSearchCommunity(Community):
                 requested_packets.extend(self._get_packets_from_infohashes(cid, torrents))
 
             if requested_packets:
-                self._dispersy.statistics.dict_inc(self._dispersy.statistics.outgoing, u"torrent-response", len(requested_packets))
+                self.statistics.increase_msg_count(u"outgoing", u"torrent-response", len(requested_packets))
                 self._dispersy.endpoint.send([message.candidate], requested_packets)
 
             if DEBUG:

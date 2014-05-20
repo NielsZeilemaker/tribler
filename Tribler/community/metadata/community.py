@@ -271,7 +271,7 @@ class MetadataCommunity(Community):
                         except StopIteration:
                             pass
                         else:
-                            self._dispersy._statistics.dict_inc(self._dispersy._statistics.outgoing, u"-lastdist-")
+                            self.statistics.increase_msg_count(u"outgoing", u"-lastdist-")
                             self._dispersy._endpoint.send([message.candidate], [str(packet)])
 
                     self.__log(3, message)
