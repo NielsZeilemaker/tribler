@@ -98,10 +98,14 @@ class TestAnonTunnelCommunity(TestGuiAsServer):
                 return proxy_community
 
 <<<<<<< HEAD
+<<<<<<< HEAD
             return blockingCallFromThread(reactor, load_community, session)
 =======
             self.community = blockingCallFromThread(reactor, load_community, session)
 >>>>>>> Port anontunnel community to twisted, not really tested.
+=======
+            return blockingCallFromThread(reactor, load_community, session)
+>>>>>>> fixup! Port anontunnel community to twisted, not really tested.
 
         TestGuiAsServer.startTest(self, setup_proxies)
 
