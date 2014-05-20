@@ -184,8 +184,6 @@ class DispersySummaryPanel(wx.lib.scrolledpanel.ScrolledPanel):
             ["Packets Delayed timeout", DATA_NONE,
                 "Total number of packets which were delayed, but got a timeout"],
             ["Walker Success", DATA_NONE, None],
-            ["Walker Success (from trackers)", DATA_NONE,
-                "Comparing the successes to tracker to overall successes"],
             ["Sync-Messages Created", DATA_NONE,
                 "Total number of messages created by us in this session which should be synced"],
             ["Bloom New", DATA_NONE,
@@ -229,26 +227,24 @@ class DispersySummaryPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 self.__utility.size_format(int(stats.total_up / (stats.timestamp - stats.start)))
             )
             self.__info_list[6][1] = compute_ratio(stats.total_send,
-                stats.received_count + stats.total_send)
-            self.__info_list[7][1] = compute_ratio(stats.received_count,
-                stats.received_count + stats.total_send)
-            self.__info_list[8][1] = compute_ratio(stats.success_count, stats.received_count)
-            self.__info_list[9][1] = compute_ratio(stats.drop_count, stats.received_count)
-            self.__info_list[10][1] = compute_ratio(stats.delay_count, stats.received_count)
-            self.__info_list[11][1] = compute_ratio(stats.delay_send, stats.delay_count)
-            self.__info_list[12][1] = compute_ratio(stats.delay_success, stats.delay_count)
-            self.__info_list[13][1] = compute_ratio(stats.delay_timeout, stats.delay_count)
-            self.__info_list[14][1] = compute_ratio(stats.walk_success, stats.walk_attempt)
-            self.__info_list[15][1] = compute_ratio(stats.walk_bootstrap_success,
-                stats.walk_bootstrap_attempt)
-            self.__info_list[16][1] = "%s" % stats.created_count
-            self.__info_list[17][1] = compute_ratio(sum(c.sync_bloom_new for c in stats.communities),
+                stats.total_received + stats.total_send)
+            self.__info_list[7][1] = compute_ratio(stats.total_received,
+                stats.total_received + stats.total_send)
+            self.__info_list[8][1] = compute_ratio(stats.msg_statistics.success_count, stats.total_received)
+            self.__info_list[9][1] = compute_ratio(stats.msg_statistics.drop_count, stats.total_received)
+            self.__info_list[10][1] = compute_ratio(stats.msg_statistics.delay_received_count, stats.total_received)
+            self.__info_list[11][1] = compute_ratio(stats.msg_statistics.delay_send_count, stats.delay_received_count)
+            self.__info_list[12][1] = compute_ratio(stats.msg_statistics.delay_success_count, stats.delay_received_count)
+            self.__info_list[13][1] = compute_ratio(stats.msg_statistics.delay_timeout_count, stats.delay_received_count)
+            self.__info_list[14][1] = compute_ratio(stats.walk_success_count, stats.walk_attempt_count)
+            self.__info_list[15][1] = "%s" % stats.msg_statistics.created_count
+            self.__info_list[16][1] = compute_ratio(sum(c.sync_bloom_new for c in stats.communities),
                 sum(c.sync_bloom_send + c.sync_bloom_skip for c in stats.communities))
-            self.__info_list[18][1] = compute_ratio(sum(c.sync_bloom_reuse for c in stats.communities),
+            self.__info_list[17][1] = compute_ratio(sum(c.sync_bloom_reuse for c in stats.communities),
                 sum(c.sync_bloom_send + c.sync_bloom_skip for c in stats.communities))
-            self.__info_list[19][1] = compute_ratio(sum(c.sync_bloom_skip for c in stats.communities),
+            self.__info_list[18][1] = compute_ratio(sum(c.sync_bloom_skip for c in stats.communities),
                 sum(c.sync_bloom_send + c.sync_bloom_skip for c in stats.communities))
-            self.__info_list[20][1] = "yes" if __debug__ else "no"
+            self.__info_list[19][1] = "yes" if __debug__ else "no"
 
         for key, value, _ in self.__info_list:
             self.__text_dict[key].SetLabel(value)
@@ -458,10 +454,10 @@ class RawInfoPanel(wx.Panel):
         self.__info = None
         self.__selected_category = None
 
-        self.__CATEGORIES = ("drop", "delay", "success", "outgoing",
-            "created", "walk_fail", "attachment", "database",
-            "endpoint_recv", "endpoint_send", "bootstrap_candidates")
-        self.__IP_CATEGORIES = ("bootstrap_candidates", "walk_fail")
+        self.__CATEGORIES = ("incoming_intro_dict", "outgoing_intro_dict",
+            "walk_failure_dict", "attachment",
+            "endpoint_recv", "endpoint_send")
+        self.__IP_CATEGORIES = ("walk_failure_dict",)
 
         self.__category_list = AutoWidthListCtrl(self, -1,
             style=wx.LC_REPORT | wx.LC_ALIGN_LEFT | wx.LC_SINGLE_SEL | wx.BORDER_SUNKEN)
