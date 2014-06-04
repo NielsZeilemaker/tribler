@@ -135,7 +135,7 @@ class SwiftProcess:
             self.fastconn = FastI2IConnection(self.cmdport, self.i2ithread_readlinecallback, self.connection_lost)
         else:
             self._logger.error("sp: start_cmd_connection: Process dead? returncode %s pid %s", self.popen.returncode, self.popen.pid)
-            print >> sys.stderr, "sp: start_cmd_connection: Process dead? returncode %s pid %s" % ( self.popen.returncode, self.popen.pid)
+            print >> sys.stderr, "sp: start_cmd_connection: Process dead? returncode %s pid %s" % (self.popen.returncode, self.popen.pid)
 
     def i2ithread_readlinecallback(self, ic, cmd):
         # if DEBUG:
