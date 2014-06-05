@@ -108,6 +108,7 @@ class SwiftProcess:
                 if not line:
                     self._logger.info("%s readline returned nothing quitting", prefix)
                     break
+                print >> sys.stderr, "%s %s" % (prefix, line.rstrip())
                 self._logger.info("%s %s", prefix, line.rstrip())
         self.popen_outputthreads = [Thread(target=read_and_print, args=(self.popen.stdout,), name="SwiftProcess_%d_stdout" % self.listenport), Thread(target=read_and_print, args=(self.popen.stderr,), name="SwiftProcess_%d_stderr" % self.listenport)]
         [thread.start() for thread in self.popen_outputthreads]
@@ -134,6 +135,7 @@ class SwiftProcess:
             self.fastconn = FastI2IConnection(self.cmdport, self.i2ithread_readlinecallback, self.connection_lost)
         else:
             self._logger.error("sp: start_cmd_connection: Process dead? returncode %s pid %s", self.popen.returncode, self.popen.pid)
+            print >> sys.stderr, "sp: start_cmd_connection: Process dead? returncode %s pid %s" % ( self.popen.returncode, self.popen.pid)
 
     def i2ithread_readlinecallback(self, ic, cmd):
         # if DEBUG:
