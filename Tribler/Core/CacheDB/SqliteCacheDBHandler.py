@@ -94,12 +94,11 @@ class BasicDBHandler(TaskManager):
 
     @classmethod
     def delInstance(cls):
-        if cls._single:
-            # cancel all pending tasks
-            cls._single.cancel_all_pending_tasks()
-
         with cls._singleton_lock:
-            cls._single = None
+            if cls._single:
+                # cancel all pending tasks
+                cls._single.cancel_all_pending_tasks()
+                cls._single = None
 
     @classmethod
     def hasInstance(cls):
@@ -1827,7 +1826,7 @@ class MyPreferenceDBHandler(BasicDBHandler):
 
     def deletePreference(self, torrent_id):
         # Preferences are never actually deleted from the database, only their destdirs get reset.
-        #self._db.delete(self.table_name, **{'torrent_id': torrent_id})
+        # self._db.delete(self.table_name, **{'torrent_id': torrent_id})
         self.updateDestDir(torrent_id, "")
 
         infohash = self._torrent_db.getInfohash(torrent_id)
