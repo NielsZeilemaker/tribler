@@ -1,42 +1,33 @@
-__author__ = 'norberhuis'
-
-import time
 
 from Tribler.dispersy.payload import Payload
-from Tribler.dispersy.crypto import ECCrypto
 
 
-class RequestSignature(Payload):
+class SignatureRequestPayload(Payload):
     """
     Payload for message to Request Signing a TimeStamp.
     """
 
     class Implementation(Payload.Implementation):
 
-        def __init__(self, ec):
+        def __init__(self, meta, timestamp, signature):
             """
             Creates the payload taking the timestamp from the system clock.
-            :param ec: Elliptic Curve Key Object to be used to sign the timestamp
             """
-            # Get the current timestamp.
-            self.timestamp = time.time()
+            super(SignatureRequestPayload.Implementation, self).__init__(meta)
 
-            # Sign the timestamp
-            self._sign_timestamp(ec)
+            self._timestamp = timestamp
+            self._signature_requester = signature
 
-        def _sign_timestamp(self, ec):
-            """
-            Signs the timestamp and saves the signature in signatureRequester.
-            :param ec: Elliptic Curve Key Object to be used to sign the timestamp.
-            :return:
-            """
-            crypto = ECCrypto()
-            # Convert the timestamp to str.
-            data = repr(self.timestamp)
-            self.signatureRequester = crypto.create_signature(ec, data)
+        @property
+        def timestamp(self):
+            return self._timestamp
+
+        @property
+        def signature_requester(self):
+            return self._signature_requester
 
 
-class SignatureResponse(Payload):
+class SignatureResponsePayload(Payload):
     """
     Payload for message that will respond to a Signature Request containing
     the Signature of {timestamp,signature_requester}.
@@ -44,14 +35,25 @@ class SignatureResponse(Payload):
 
     class Implementation(Payload.Implementation):
 
-        def __init__(self, ec, request):
+        def __init__(self, meta, timestamp, signature_requester, signature):
             """
             Creates the payload containing the signature of {timestamp,signature_requester}
             by the recipient of the SignatureRequest.
-            :param ec: Elliptic Curve Key Object to be used to sign the timestamp
-            :param request: original SignatureRequest.
             """
-            crypto = ECCrypto()
-            # Convert the timestamp to str and concatenate the requester signature
-            data = repr(request.timestamp) + request.signatureRequester
-            self.signatureResponder = crypto.create_signature(ec, data)
+            super(SignatureResponsePayload.Implementation, self).__init__(meta)
+
+            self._timestamp = timestamp
+            self._signature_requester = signature_requester
+            self._signature_responder = signature
+
+        @property
+        def timestamp(self):
+            return self._timestamp
+
+        @property
+        def signature_requester(self):
+            return self._signature_requester
+
+        @property
+        def signature_responder(self):
+            return self._signature_responder

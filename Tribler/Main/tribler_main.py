@@ -496,7 +496,12 @@ class ABCApp(object):
             from Tribler.community.channel.community import ChannelCommunity
             from Tribler.community.channel.preview import PreviewChannelCommunity
             from Tribler.community.metadata.community import MetadataCommunity
+<<<<<<< HEAD
             from Tribler.community.tunnel.community import TunnelCommunity, TunnelSettings
+=======
+            from Tribler.community.tunnel.community import TunnelCommunity
+            from Tribler.community.doubleentry.community import DoubleEntryCommunity
+>>>>>>> 61665bc... DoubleEntry: working community
 
             # make sure this is only called once
             session.remove_observer(define_communities)
@@ -519,6 +524,7 @@ class ABCApp(object):
             dispersy.define_auto_load(PreviewChannelCommunity, session.dispersy_member, kargs=default_kwargs)
 
             if self.sconfig.get_tunnel_community_enabled() and not self.is_unit_testing:
+
                 keypair = dispersy.crypto.generate_key(u"NID_secp160k1")
                 dispersy_member = dispersy.get_member(private_key=dispersy.crypto.key_to_bin(keypair),)
                 settings = TunnelSettings(session.get_install_dir())
