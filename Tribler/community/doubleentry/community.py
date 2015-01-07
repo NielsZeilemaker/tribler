@@ -83,6 +83,7 @@ class DoubleEntryCommunity(Community):
 
     def create_signature_response_message(self, signature_request):
         self._logger.info("Sending signature response.")
+        print("Sending signature response!")
         meta = self.get_meta_message(SIGNATURE_RESPONSE)
         # Create the part to be signed.
         timestamp = signature_request.payload.timestamp
@@ -99,6 +100,7 @@ class DoubleEntryCommunity(Community):
 
     def _check_signature_request(self, messages):
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
+        print("Received " + str(len(messages)) + " signature requests.")
         for message in messages:
             # For now do no checking.
 
@@ -106,6 +108,7 @@ class DoubleEntryCommunity(Community):
 
     def _check_signature_response(self, messages):
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
+        print("Received " + str(len(messages)) + " signature responses.")
         for message in messages:
             # For now do no checking.
 

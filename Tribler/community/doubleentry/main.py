@@ -55,13 +55,15 @@ class DoubleEntry(object):
         def start_community():
             community = DoubleEntryCommunity
             self._member = self.dispersy.get_new_member(u"NID_secp160k1")
-            self.community = self.dispersy.define_auto_load(community, self._member, (None, self.settings), load=True)[0]
+            self.community = self.dispersy.define_auto_load(community, self._member,
+                                                            (None, self.settings), load=True)[0]
             self.community.set_ec(self._member.private_key)
 
         blockingCallFromThread(reactor, start_community)
 
     def signature_request(self):
         self.community.create_signature_request_message()
+
 
 # Reads cmdline input to operate the Double Entry community.
 class CommandHandler(LineReceiver):
@@ -77,7 +79,6 @@ class CommandHandler(LineReceiver):
     # Process a line received.
     def lineReceived(self, line):
         if line == 'r':
-            print "Sending timestamp signature request."
             self.doubleentry.signature_request()
 
         self.transport.write('>>> ')
