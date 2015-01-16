@@ -1,10 +1,9 @@
+import base64
 
 from Tribler.Core.Utilities.encoding import encode, decode
 
 from Tribler.dispersy.conversion import BinaryConversion
 from Tribler.dispersy.message import DropPacket
-
-
 
 
 class DoubleEntryConversion(BinaryConversion):
@@ -23,6 +22,7 @@ class DoubleEntryConversion(BinaryConversion):
             decode(None, 0, result)
 
         except DropPacket:
+            print "Exception in decoding a encoded message."
             raise
         except:
             pass
@@ -31,25 +31,35 @@ class DoubleEntryConversion(BinaryConversion):
     def _encode_signature_request(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
         # Return (encoding,)
-        return encode((message.payload.timestamp, message.payload.signature_requester)),
+        print("Sending t:" + message.payload.timestamp + " pk: " + base64.encodestring(message.payload.public_key)
+              + " s: " + base64.encodestring(message.payload.signature_requester))
+        return encode((message.payload.timestamp, message.payload.public_key,
+                       message.payload.signature_requester)),
 
     def _decode_signature_request(self, placeholder, offset, data):
         try:
             offset, values = decode(data, offset)
-            if len(values) != 2:
+            if len(values) != 3:
                 raise ValueError
         except ValueError:
             raise DropPacket("Unable to decode the signature-request")
+        print("Received t:" + values[0] + " pk:" + base64.encodestring(values[1]) + " s:"
+              + base64.encodestring(values[2]))
 
         timestamp = values[0]
-        if not isinstance(timestamp, float):
+        if not isinstance(timestamp, str):
             raise DropPacket("Invalid type timestamp")
 
-        signature_request = values[1]
+        public_key = values[1]
+        if not isinstance(timestamp, str):
+            raise DropPacket("Invalid public_key")
+
+
+        signature_request = values[2]
         if not isinstance(signature_request, str):
             raise DropPacket("Invalid type signature_request")
 
-        return offset, placeholder.meta.payload.implement(timestamp, signature_request)
+        return offset, placeholder.meta.payload.implement(timestamp, public_key, signature_request)
 
     def _encode_signature_response(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
@@ -66,7 +76,7 @@ class DoubleEntryConversion(BinaryConversion):
             raise DropPacket("Unable to decode the signature-response")
 
         timestamp = values[0]
-        if not isinstance(timestamp, float):
+        if not isinstance(timestamp, str):
             raise DropPacket("Invalid type timestamp")
 
         signature_request = values[1]

@@ -62,8 +62,7 @@ class DoubleEntry(object):
         blockingCallFromThread(reactor, start_community)
 
     def signature_request(self):
-        self.community.create_signature_request_message()
-
+        self.community.publish_signature_request_message()
 
 # Reads cmdline input to operate the Double Entry community.
 class CommandHandler(LineReceiver):

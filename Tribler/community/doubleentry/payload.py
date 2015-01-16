@@ -9,18 +9,23 @@ class SignatureRequestPayload(Payload):
 
     class Implementation(Payload.Implementation):
 
-        def __init__(self, meta, timestamp, signature):
+        def __init__(self, meta, timestamp, public_key, signature):
             """
             Creates the payload taking the timestamp from the system clock.
             """
             super(SignatureRequestPayload.Implementation, self).__init__(meta)
 
             self._timestamp = timestamp
+            self._public_key = public_key
             self._signature_requester = signature
 
         @property
         def timestamp(self):
             return self._timestamp
+
+        @property
+        def public_key(self):
+            return self._public_key
 
         @property
         def signature_requester(self):

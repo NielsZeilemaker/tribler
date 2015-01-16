@@ -1,12 +1,13 @@
 import time
 import logging
+import base64
 
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.resolution import PublicResolution
 from Tribler.dispersy.distribution import FullSyncDistribution
 from Tribler.dispersy.destination import CommunityDestination
 from Tribler.dispersy.community import Community
-from Tribler.dispersy.message import Message
+from Tribler.dispersy.message import Message, DropMessage
 from Tribler.dispersy.crypto import ECCrypto
 from Tribler.dispersy.conversion import DefaultConversion
 
@@ -70,15 +71,24 @@ class DoubleEntryCommunity(Community):
     def initiate_conversions(self):
         return [DefaultConversion(self), DoubleEntryConversion(self)]
 
+    def publish_signature_request_message(self):
+        message = self.create_signature_request_message()
+        self.dispersy.store_update_forward([message], True, True, True)
+
     def create_signature_request_message(self):
         meta = self.get_meta_message(SIGNATURE_REQUEST)
 
-        timestamp = time.time()
-        signature = ECCrypto().create_signature(self._ec, repr(timestamp))
+        timestamp = repr(time.time())
+        public_key = ECCrypto().key_to_bin(self._ec.pub())
+        signature = ECCrypto().create_signature(self._ec, timestamp)
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
-                            payload=(timestamp, signature))
+                            payload=(timestamp, public_key, signature))
+        return message
+
+    def publish_signature_response_message(self, signature_request):
+        message = self.create_signature_response_message(signature_request)
         self._dispersy.store_update_forward([message], True, True, True)
 
     def create_signature_response_message(self, signature_request):
@@ -88,7 +98,7 @@ class DoubleEntryCommunity(Community):
         # Create the part to be signed.
         timestamp = signature_request.payload.timestamp
         signature_requester = signature_request._payload.signature_requester
-        request = repr(timestamp) + "." + signature_requester
+        request = timestamp + "." + signature_requester
 
         # Sign the request
         signature = ECCrypto().create_signature(self._ec, request)
@@ -96,15 +106,36 @@ class DoubleEntryCommunity(Community):
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
                             payload=(timestamp, signature_requester, signature))
-        self._dispersy.store_update_forward([message], True, True, True)
+        return message
+
+    def validate_signature_request(self, message):
+        # Check if the payload contains a valid public key.
+        public_key_binary = message.payload.public_key
+        # Validate if the key is a valid key.
+        if ECCrypto().is_valid_public_bin(public_key_binary):
+            # Convert the public key from the binary format to EC_PUB instance
+            public_key = ECCrypto().key_from_public_bin(public_key_binary)
+            # Validate the signature
+            if ECCrypto().is_valid_signature(public_key, message.payload.timestamp,
+                                            message.payload.signature_requester):
+                # Pass on the message
+                print("Received valid message")
+                return True
+            else:
+                print("Signature of request is invalid")
+                return False
+        else:
+            print("Public key invalid")
+            return False
 
     def _check_signature_request(self, messages):
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
         print("Received " + str(len(messages)) + " signature requests.")
         for message in messages:
-            # For now do no checking.
-
-            yield message
+            if self.validate_signature_request(message):
+                yield message
+            else:
+                DropMessage(message, "Invalid signature request message")
 
     def _check_signature_response(self, messages):
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
