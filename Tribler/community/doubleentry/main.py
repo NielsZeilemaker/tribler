@@ -1,6 +1,7 @@
 import os
 import sys
 import random
+import time
 
 from Tribler.Core.SessionConfig import SessionStartupConfig
 from Tribler.Core.Session import Session
@@ -28,7 +29,7 @@ class DoubleEntry(object):
         self.settings.socks_listen_ports = [random.randint(1000, 65535) for _ in range(5)]
         self.session = self.create_tribler_session()
         self.session.start()
-        print >> sys.stderr, "Using port %d for swift tunnel" % self.session.get_swift_tunnel_listen_port()
+        print >> sys.stderr, "Using port %d" % self.session.get_dispersy_port()
 
         self.dispersy = self.session.lm.dispersy
 
@@ -46,7 +47,7 @@ class DoubleEntry(object):
         config.set_videoplayer(False)
 
         config.set_dispersy(True)
-        config.set_swift_tunnel_listen_port(self.settings.swift_port)
+        config.set_dispersy_port(self.settings.dispersy_port)
 
         return Session(config)
 
@@ -63,6 +64,7 @@ class DoubleEntry(object):
 
     def signature_request(self):
         self.community.publish_signature_request_message()
+
 
 # Reads cmdline input to operate the Double Entry community.
 class CommandHandler(LineReceiver):
@@ -87,6 +89,10 @@ def main(argv):
     doubleentry = DoubleEntry()
     StandardIO(CommandHandler(doubleentry))
     doubleentry.run()
+
+    # Keep the program running.
+    while True:
+        time.sleep(1)
 
 
 

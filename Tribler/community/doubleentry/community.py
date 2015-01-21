@@ -229,4 +229,4 @@ class DoubleEntrySettings(object):
 
     def __init__(self):
         self.socks_listen_ports = range(9000, 9000)
-        self.swift_port = -1
+        self.dispersy_port = -1
