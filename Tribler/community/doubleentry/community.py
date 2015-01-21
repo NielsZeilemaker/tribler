@@ -1,6 +1,5 @@
 import time
 import logging
-import base64
 
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.resolution import PublicResolution
@@ -19,6 +18,9 @@ SIGNATURE_RESPONSE = u"de_signature_response"
 
 
 class DoubleEntryCommunity(Community):
+    """
+    Community prototype for reputation based tamper proof interaction history.
+    """
 
     def __init__(self, *args, **kwargs):
         super(DoubleEntryCommunity, self).__init__(*args, **kwargs)
@@ -72,10 +74,17 @@ class DoubleEntryCommunity(Community):
         return [DefaultConversion(self), DoubleEntryConversion(self)]
 
     def publish_signature_request_message(self):
+        """
+        Creates and sends out signature_request message.
+        """
         message = self.create_signature_request_message()
         self.dispersy.store_update_forward([message], True, True, True)
 
     def create_signature_request_message(self):
+        """
+        Create a signature request message using the current time stamp.
+        :return: Signature_request message ready for distribution.
+        """
         meta = self.get_meta_message(SIGNATURE_REQUEST)
 
         timestamp = repr(time.time())
@@ -87,40 +96,55 @@ class DoubleEntryCommunity(Community):
                             payload=(timestamp, public_key, signature))
         return message
 
-    def validate_signature_request(self, message):
-        # Check if the payload contains a valid public key.
-        public_key_binary = message.payload.public_key_requester
-        # Validate if the key is a valid key.
-        if ECCrypto().is_valid_public_bin(public_key_binary):
-            # Convert the public key from the binary format to EC_PUB instance
-            public_key = ECCrypto().key_from_public_bin(public_key_binary)
-            # Validate the signature
-            if ECCrypto().is_valid_signature(public_key, message.payload.timestamp,
-                                             message.payload.signature_requester):
-                # Pass on the message
-                print("Received valid message")
-                return True
-            else:
-                print("Signature of request is invalid")
-                return False
-        else:
-            print("Public key invalid")
-            return False
+    def validate_signature_request(self, signature_request):
+        """
+        Validates if the signature_request message contains correct signatures and public keys.
+        :param signature_request: The message that needs to be checked.
+        :return: Boolean containing the truth value of the validity of the message.
+        """
+        payload = signature_request.payload
+        # Check if the request is valid
+        return self.validate_signature(payload.public_key_requester, payload.timestamp,
+                                       payload.signature_requester)
 
     def _check_signature_request(self, messages):
+        """
+        Generator that generates a list of correct signature_request messages from a list of messages.
+        :param messages: Potential valid signature_request messages.
+        :return: Series of correct signature_request messages
+        """
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
         print("Received " + str(len(messages)) + " signature requests.")
         for message in messages:
             if self.validate_signature_request(message):
+                print("Received valid request.")
                 yield message
             else:
                 DropMessage(message, "Invalid signature request message")
 
+    def _on_signature_request(self, messages):
+        """
+        Handles behaviour of the community when it receives a signature_request message.
+        It will send out a signature response
+        :param messages: Signature_request messages that needs to be handled.
+        """
+        for message in messages:
+            self.publish_signature_response_message(message)
+
     def publish_signature_response_message(self, signature_request):
+        """
+        Creates and sends out signature_response message for a signature_request message
+        :param signature_request: signature_request message that needs to be responded to.
+        """
         message = self.create_signature_response_message(signature_request)
         self._dispersy.store_update_forward([message], True, True, True)
 
     def create_signature_response_message(self, signature_request):
+        """
+        Create a signature response message for a signature_request message.
+        :param signature_request: signature_request message that needs to be responded to.
+        :return: Signature_response message ready for distribution.
+        """
         self._logger.info("Sending signature response.")
         print("Sending signature response!")
         meta = self.get_meta_message(SIGNATURE_RESPONSE)
@@ -141,20 +165,64 @@ class DoubleEntryCommunity(Community):
                                      signature))
         return message
 
+    def validate_signature_response(self, signature_response):
+        """
+        Validates if the signature_response message contains correct signatures and public keys.
+        :param signature_response: The message that needs to be checked.
+        :return: Boolean containing the truth value of the validity of the message.
+        """
+        payload = signature_response.payload
+        # Check if the request part is valid.
+        valid_request = self.validate_signature(payload.public_key_requester, payload.timestamp,
+                                                payload.signature_requester)
+        # Check if the response part is valid.
+        valid_response = self.validate_signature(
+            payload.public_key_responder,
+            payload.timestamp + "." + payload.public_key_requester + "." + payload.signature_requester,
+            payload.signature_responder)
+        # Both have to be valid.
+        return valid_request and valid_response
+
     def _check_signature_response(self, messages):
-        self._logger.info("Received " + str(len(messages)) + " signature requests.")
+        """
+        Generator that generates a list of correct signature_response messages from a list of messages.
+        :param messages: Potential valid signature_response messages.
+        :return: Series of correct signature_response messages
+        """
+        self._logger.info("Received " + str(len(messages)) + " signature responses.")
         print("Received " + str(len(messages)) + " signature responses.")
         for message in messages:
             # For now do no checking.
-
-            yield message
-
-    def _on_signature_request(self, messages):
-        for message in messages:
-            self.publish_signature_response_message(message)
+            if self.validate_signature_response(message):
+                print("Received valid response")
+                yield message
+            else:
+                DropMessage(message, "Invalid signature response message")
 
     def _on_signature_response(self, messages):
         pass
+
+    @staticmethod
+    def validate_signature(public_key_binary, payload, signature):
+        """
+        Utility method that uses a pk in binary to check
+        if the pk has been used to create the signature for the payload.
+        :param public_key_binary: Public Key in binary format.
+        :param payload: string that has to be signed.
+        :param signature: string that contains the signature.
+        :return: Boolean that contains the truth value if the signature and public key correspond.
+        """
+        # Check if the payload contains a valid public key
+        if ECCrypto().is_valid_public_bin(public_key_binary):
+            # Convert the public key from the binary format to EC_Pub type
+            if ECCrypto().is_valid_public_bin(public_key_binary):
+                # Convert the public key from the binary format to EC_PUB instance
+                public_key = ECCrypto().key_from_public_bin(public_key_binary)
+                # Check the signature
+                return ECCrypto().is_valid_signature(public_key, payload, signature)
+        else:
+            # Invalid public key.
+            return False
 
 
 class DoubleEntrySettings(object):

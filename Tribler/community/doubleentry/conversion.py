@@ -85,7 +85,7 @@ class DoubleEntryConversion(BinaryConversion):
             raise DropPacket("Invalid type timestamp")
 
         public_key_requester = values[1]
-        if not isinstance((public_key_requester, str)):
+        if not isinstance(public_key_requester, str):
             raise DropPacket("Invalid type public_key_requester")
 
         signature_requester = values[2]
