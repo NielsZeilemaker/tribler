@@ -87,37 +87,16 @@ class DoubleEntryCommunity(Community):
                             payload=(timestamp, public_key, signature))
         return message
 
-    def publish_signature_response_message(self, signature_request):
-        message = self.create_signature_response_message(signature_request)
-        self._dispersy.store_update_forward([message], True, True, True)
-
-    def create_signature_response_message(self, signature_request):
-        self._logger.info("Sending signature response.")
-        print("Sending signature response!")
-        meta = self.get_meta_message(SIGNATURE_RESPONSE)
-        # Create the part to be signed.
-        timestamp = signature_request.payload.timestamp
-        signature_requester = signature_request._payload.signature_requester
-        request = timestamp + "." + signature_requester
-
-        # Sign the request
-        signature = ECCrypto().create_signature(self._ec, request)
-
-        message = meta.impl(authentication=(self.my_member,),
-                            distribution=(self.claim_global_time(),),
-                            payload=(timestamp, signature_requester, signature))
-        return message
-
     def validate_signature_request(self, message):
         # Check if the payload contains a valid public key.
-        public_key_binary = message.payload.public_key
+        public_key_binary = message.payload.public_key_requester
         # Validate if the key is a valid key.
         if ECCrypto().is_valid_public_bin(public_key_binary):
             # Convert the public key from the binary format to EC_PUB instance
             public_key = ECCrypto().key_from_public_bin(public_key_binary)
             # Validate the signature
             if ECCrypto().is_valid_signature(public_key, message.payload.timestamp,
-                                            message.payload.signature_requester):
+                                             message.payload.signature_requester):
                 # Pass on the message
                 print("Received valid message")
                 return True
@@ -137,6 +116,31 @@ class DoubleEntryCommunity(Community):
             else:
                 DropMessage(message, "Invalid signature request message")
 
+    def publish_signature_response_message(self, signature_request):
+        message = self.create_signature_response_message(signature_request)
+        self._dispersy.store_update_forward([message], True, True, True)
+
+    def create_signature_response_message(self, signature_request):
+        self._logger.info("Sending signature response.")
+        print("Sending signature response!")
+        meta = self.get_meta_message(SIGNATURE_RESPONSE)
+
+        # Create the part to be signed.
+        timestamp = signature_request.payload.timestamp
+        public_key_requester = signature_request.payload.public_key_requester
+        signature_requester = signature_request.payload.signature_requester
+        request = timestamp + "." + public_key_requester + "." + signature_requester
+        # Create the personal part of the message.
+        public_key_responder = ECCrypto().key_to_bin(self._ec.pub())
+        # Sign the request.
+        signature = ECCrypto().create_signature(self._ec, request)
+
+        message = meta.impl(authentication=(self.my_member,),
+                            distribution=(self.claim_global_time(),),
+                            payload=(timestamp, public_key_requester, signature_requester, public_key_responder,
+                                     signature))
+        return message
+
     def _check_signature_response(self, messages):
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
         print("Received " + str(len(messages)) + " signature responses.")
@@ -147,7 +151,7 @@ class DoubleEntryCommunity(Community):
 
     def _on_signature_request(self, messages):
         for message in messages:
-            self.create_signature_response_message(message)
+            self.publish_signature_response_message(message)
 
     def _on_signature_response(self, messages):
         pass

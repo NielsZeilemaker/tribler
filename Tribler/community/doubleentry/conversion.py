@@ -31,9 +31,10 @@ class DoubleEntryConversion(BinaryConversion):
     def _encode_signature_request(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
         # Return (encoding,)
-        print("Sending t:" + message.payload.timestamp + " pk: " + base64.encodestring(message.payload.public_key)
-              + " s: " + base64.encodestring(message.payload.signature_requester))
-        return encode((message.payload.timestamp, message.payload.public_key,
+        print("Sending request t:" + message.payload.timestamp +
+              " pk: " + base64.encodestring(message.payload.public_key_requester) +
+              " s: " + base64.encodestring(message.payload.signature_requester))
+        return encode((message.payload.timestamp, message.payload.public_key_requester,
                        message.payload.signature_requester)),
 
     def _decode_signature_request(self, placeholder, offset, data):
@@ -54,7 +55,6 @@ class DoubleEntryConversion(BinaryConversion):
         if not isinstance(timestamp, str):
             raise DropPacket("Invalid public_key")
 
-
         signature_request = values[2]
         if not isinstance(signature_request, str):
             raise DropPacket("Invalid type signature_request")
@@ -64,13 +64,18 @@ class DoubleEntryConversion(BinaryConversion):
     def _encode_signature_response(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
         # Return (encoding,)
-        return encode((message.payload.timestamp, message.payload.signature_requester,
+        print("Sending response t:" + message.payload.timestamp + "\n" +
+              " pkreq: " + base64.encodestring(message.payload.public_key_requester) + "\n" +
+              " sreq: " + base64.encodestring(message.payload.signature_requester) + "\n" +
+              "  pkres:" + base64.encodestring(message.payload.public_key_responder) + "\n" +
+              " sres: " + base64.encodestring(message.payload.signature_responder))
+        return encode((message.payload.timestamp, message.payload.public_key_requester, message.payload.signature_requester, message.payload.public_key_responder,
                        message.payload.signature_responder)),
 
     def _decode_signature_response(self, placeholder, offset, data):
         try:
             offset, values = decode(data, offset)
-            if len(values) != 3:
+            if len(values) != 5:
                 raise ValueError
         except ValueError:
             raise DropPacket("Unable to decode the signature-response")
@@ -79,12 +84,20 @@ class DoubleEntryConversion(BinaryConversion):
         if not isinstance(timestamp, str):
             raise DropPacket("Invalid type timestamp")
 
-        signature_request = values[1]
-        if not isinstance(signature_request, str):
+        public_key_requester = values[1]
+        if not isinstance((public_key_requester, str)):
+            raise DropPacket("Invalid type public_key_requester")
+
+        signature_requester = values[2]
+        if not isinstance(signature_requester, str):
             raise DropPacket("Invalid type signature_request")
 
-        signature_responder = values[2]
+        public_key_responder = values[3]
+        if not isinstance(public_key_responder, str):
+            raise DropPacket("Invalid type public_key_responder")
+
+        signature_responder = values[4]
         if not isinstance(signature_responder, str):
             raise DropPacket("Invalid type signature_request")
 
-        return offset, placeholder.meta.payload.implement(timestamp, signature_request, signature_responder)
+        return offset, placeholder.meta.payload.implement(timestamp, public_key_requester, signature_requester, public_key_responder, signature_responder)

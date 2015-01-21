@@ -16,7 +16,7 @@ class SignatureRequestPayload(Payload):
             super(SignatureRequestPayload.Implementation, self).__init__(meta)
 
             self._timestamp = timestamp
-            self._public_key = public_key
+            self._public_key_requester = public_key
             self._signature_requester = signature
 
         @property
@@ -24,8 +24,8 @@ class SignatureRequestPayload(Payload):
             return self._timestamp
 
         @property
-        def public_key(self):
-            return self._public_key
+        def public_key_requester(self):
+            return self._public_key_requester
 
         @property
         def signature_requester(self):
@@ -40,7 +40,7 @@ class SignatureResponsePayload(Payload):
 
     class Implementation(Payload.Implementation):
 
-        def __init__(self, meta, timestamp, signature_requester, signature):
+        def __init__(self, meta, timestamp, public_key_requester, signature_requester, public_key_responder, signature):
             """
             Creates the payload containing the signature of {timestamp,signature_requester}
             by the recipient of the SignatureRequest.
@@ -48,7 +48,10 @@ class SignatureResponsePayload(Payload):
             super(SignatureResponsePayload.Implementation, self).__init__(meta)
 
             self._timestamp = timestamp
+            self._public_key_requester = public_key_requester
             self._signature_requester = signature_requester
+
+            self._public_key_responder = public_key_responder
             self._signature_responder = signature
 
         @property
@@ -56,8 +59,16 @@ class SignatureResponsePayload(Payload):
             return self._timestamp
 
         @property
+        def public_key_requester(self):
+            return self._public_key_requester
+
+        @property
         def signature_requester(self):
             return self._signature_requester
+
+        @property
+        def public_key_responder(self):
+            return self._public_key_responder
 
         @property
         def signature_responder(self):
