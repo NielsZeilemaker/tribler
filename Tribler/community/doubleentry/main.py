@@ -2,6 +2,7 @@ import os
 import sys
 import random
 import time
+import logging.config
 
 from Tribler.Core.SessionConfig import SessionStartupConfig
 from Tribler.Core.Session import Session
@@ -86,6 +87,8 @@ class CommandHandler(LineReceiver):
 
 
 def main(argv):
+    logging.config.fileConfig("logger.conf")
+
     doubleentry = DoubleEntry()
     StandardIO(CommandHandler(doubleentry))
     doubleentry.run()

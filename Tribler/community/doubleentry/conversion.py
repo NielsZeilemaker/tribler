@@ -1,5 +1,3 @@
-import base64
-
 from Tribler.Core.Utilities.encoding import encode, decode
 
 from Tribler.dispersy.conversion import BinaryConversion
@@ -12,6 +10,7 @@ class DoubleEntryConversion(BinaryConversion):
         super(DoubleEntryConversion, self).__init__(community, "\x01")
         from Tribler.community.doubleentry.community import SIGNATURE_REQUEST
         from Tribler.community.doubleentry.community import SIGNATURE_RESPONSE
+
         # Define Request Signature.
         self.define_meta_message(chr(1), community.get_meta_message(SIGNATURE_REQUEST), lambda message: self._encode_decode(self._encode_signature_request, self._decode_signature_request, message), self._decode_signature_request)
         self.define_meta_message(chr(2), community.get_meta_message(SIGNATURE_RESPONSE), lambda message: self._encode_decode(self._encode_signature_response, self._decode_signature_response, message), self._decode_signature_response)
@@ -22,7 +21,6 @@ class DoubleEntryConversion(BinaryConversion):
             decode(None, 0, result)
 
         except DropPacket:
-            print "Exception in decoding a encoded message."
             raise
         except:
             pass
@@ -31,9 +29,6 @@ class DoubleEntryConversion(BinaryConversion):
     def _encode_signature_request(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
         # Return (encoding,)
-        print("Sending request t:" + message.payload.timestamp +
-              " pk: " + base64.encodestring(message.payload.public_key_requester) +
-              " s: " + base64.encodestring(message.payload.signature_requester))
         return encode((message.payload.timestamp, message.payload.public_key_requester,
                        message.payload.signature_requester)),
 
@@ -44,8 +39,6 @@ class DoubleEntryConversion(BinaryConversion):
                 raise ValueError
         except ValueError:
             raise DropPacket("Unable to decode the signature-request")
-        print("Received t:" + values[0] + " pk:" + base64.encodestring(values[1]) + " s:"
-              + base64.encodestring(values[2]))
 
         timestamp = values[0]
         if not isinstance(timestamp, str):
@@ -64,11 +57,6 @@ class DoubleEntryConversion(BinaryConversion):
     def _encode_signature_response(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
         # Return (encoding,)
-        print("Sending response t:" + message.payload.timestamp + "\n" +
-              " pkreq: " + base64.encodestring(message.payload.public_key_requester) + "\n" +
-              " sreq: " + base64.encodestring(message.payload.signature_requester) + "\n" +
-              "  pkres:" + base64.encodestring(message.payload.public_key_responder) + "\n" +
-              " sres: " + base64.encodestring(message.payload.signature_responder))
         return encode((message.payload.timestamp, message.payload.public_key_requester, message.payload.signature_requester, message.payload.public_key_responder,
                        message.payload.signature_responder)),
 

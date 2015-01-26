@@ -77,6 +77,7 @@ class DoubleEntryCommunity(Community):
         """
         Creates and sends out signature_request message.
         """
+        self._logger.info("Sending signature request.")
         message = self.create_signature_request_message()
         self.dispersy.store_update_forward([message], True, True, True)
 
@@ -114,10 +115,9 @@ class DoubleEntryCommunity(Community):
         :return: Series of correct signature_request messages
         """
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
-        print("Received " + str(len(messages)) + " signature requests.")
         for message in messages:
             if self.validate_signature_request(message):
-                print("Received valid request.")
+                self._logger.info("Received valid request.")
                 yield message
             else:
                 DropMessage(message, "Invalid signature request message")
@@ -136,6 +136,7 @@ class DoubleEntryCommunity(Community):
         Creates and sends out signature_response message for a signature_request message
         :param signature_request: signature_request message that needs to be responded to.
         """
+        self._logger.info("Sending signature response.")
         message = self.create_signature_response_message(signature_request)
         self._dispersy.store_update_forward([message], True, True, True)
 
@@ -145,8 +146,6 @@ class DoubleEntryCommunity(Community):
         :param signature_request: signature_request message that needs to be responded to.
         :return: Signature_response message ready for distribution.
         """
-        self._logger.info("Sending signature response.")
-        print("Sending signature response!")
         meta = self.get_meta_message(SIGNATURE_RESPONSE)
 
         # Create the part to be signed.
@@ -190,11 +189,10 @@ class DoubleEntryCommunity(Community):
         :return: Series of correct signature_response messages
         """
         self._logger.info("Received " + str(len(messages)) + " signature responses.")
-        print("Received " + str(len(messages)) + " signature responses.")
         for message in messages:
             # For now do no checking.
             if self.validate_signature_response(message):
-                print("Received valid response")
+                self._logger.info("Received valid response")
                 yield message
             else:
                 DropMessage(message, "Invalid signature response message")
