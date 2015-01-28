@@ -5,6 +5,9 @@ from Tribler.dispersy.message import DropPacket
 
 
 class DoubleEntryConversion(BinaryConversion):
+    """
+    Class that handles all encoding and decoding of DoubleEntry messages.
+    """
 
     def __init__(self, community):
         super(DoubleEntryConversion, self).__init__(community, "\x01")
@@ -27,8 +30,11 @@ class DoubleEntryConversion(BinaryConversion):
         return result
 
     def _encode_signature_request(self, message):
-        # Encode a tuple containing the timestamp, the signature of the requester and the responder.
-        # Return (encoding,)
+        """
+        Encode a signature_request message.
+        :param message: The message to be encoded.
+        :return: encoded signature request message.
+        """
         return encode((message.payload.timestamp, message.payload.public_key_requester,
                        message.payload.signature_requester)),
 

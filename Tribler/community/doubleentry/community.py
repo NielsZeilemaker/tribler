@@ -224,6 +224,9 @@ class DoubleEntryCommunity(Community):
 
 
 class DoubleEntrySettings(object):
+    """
+    Class that contains settings for the double entry community.
+    """
 
     def __init__(self):
         self.socks_listen_ports = range(9000, 9000)

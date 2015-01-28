@@ -1,3 +1,6 @@
+"""
+Python file to bootstrap a single DOubleEntry Community.
+"""
 import os
 import sys
 import random
@@ -21,8 +24,15 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file_
 
 # Class that handles boot strapping the DoubleEntry Community.
 class DoubleEntry(object):
+    """
+    Class that handles boot strapping the DoubleEntry Community when running a single community instance without Tribler.
+    """
 
     def __init__(self):
+        """
+        Setup this class to be able to run the community with the run method.
+        :return:
+        """
         self.community = None
         self._member = None
         self.settings = DoubleEntrySettings()
@@ -35,6 +45,10 @@ class DoubleEntry(object):
         self.dispersy = self.session.lm.dispersy
 
     def create_tribler_session(self):
+        """
+        Create a tribler session usable to create a DoubleEntry Community.
+        :return: Tribler.Core.Session
+        """
         # Setup the tribler session
         config = SessionStartupConfig()
         config.set_state_dir(os.path.join(BASE_DIR, ".Tribler-%d") % self.settings.socks_listen_ports[0])
@@ -53,7 +67,10 @@ class DoubleEntry(object):
         return Session(config)
 
     def run(self):
-        # Start the community.
+        """
+        Starts the Double Entry community with a new EC key as ID.
+        :return:
+        """
         def start_community():
             community = DoubleEntryCommunity
             self._member = self.dispersy.get_new_member(u"NID_secp160k1")
@@ -64,11 +81,16 @@ class DoubleEntry(object):
         blockingCallFromThread(reactor, start_community)
 
     def signature_request(self):
+        """
+        Instruct the community to send out a signature request.
+        """
         self.community.publish_signature_request_message()
 
 
-# Reads cmdline input to operate the Double Entry community.
 class CommandHandler(LineReceiver):
+    """
+    Reads cmdline input to operate the Double Entry community.
+    """
     from os import linesep
     delimiter = linesep
 
@@ -78,7 +100,7 @@ class CommandHandler(LineReceiver):
     def connectionMade(self):
         self.transport.write('>>> ')
 
-    # Process a line received.
+
     def lineReceived(self, line):
         if line == 'r':
             self.doubleentry.signature_request()
@@ -87,6 +109,10 @@ class CommandHandler(LineReceiver):
 
 
 def main(argv):
+    """
+    Main method to start a Double Entry community that listens to commandline input.
+    :param argv:
+    """
     logging.config.fileConfig("logger.conf")
 
     doubleentry = DoubleEntry()
@@ -96,7 +122,6 @@ def main(argv):
     # Keep the program running.
     while True:
         time.sleep(1)
-
 
 
 if __name__ == "__main__":
