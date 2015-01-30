@@ -1,5 +1,7 @@
 import time
 import logging
+import base64
+from hashlib import sha1
 
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.resolution import PublicResolution
@@ -133,11 +135,13 @@ class DoubleEntryCommunity(Community):
 
     def publish_signature_response_message(self, signature_request):
         """
-        Creates and sends out signature_response message for a signature_request message
+        Creates and sends out signature_response message for a signature_request message.
+        The message is also locally persisted.
         :param signature_request: signature_request message that needs to be responded to.
         """
         self._logger.info("Sending signature response.")
         message = self.create_signature_response_message(signature_request)
+
         self._dispersy.store_update_forward([message], True, True, True)
 
     def create_signature_response_message(self, signature_request):
@@ -198,7 +202,32 @@ class DoubleEntryCommunity(Community):
                 DropMessage(message, "Invalid signature response message")
 
     def _on_signature_response(self, messages):
-        pass
+        for message in messages:
+            self.persist_signature_response(message)
+
+    def persist_signature_response(self, message):
+        """
+        Persist the signature response message.
+        A hash will be created from the message and this will be used as an unique identifier.
+        :param message:
+        :return:
+        """
+        message_hash = self.hash_signature_response(message)
+        self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))
+
+    @staticmethod
+    def hash_signature_response(message):
+        """
+        Create a hash of a signature response message.
+        :param message: The message a hash has to be taken from
+        :return: Hash
+        """
+        payload = message.payload
+        # Prepare the data to be signed.
+        data = payload.timestamp + "." + payload.public_key_requester + "." + payload.signature_requester + "." + payload.public_key_responder + "." + payload.signature_responder
+        # Create the hash using SHA1.
+        return sha1(data).digest()
+
 
     @staticmethod
     def validate_signature(public_key_binary, payload, signature):
