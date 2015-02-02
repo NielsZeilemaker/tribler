@@ -15,19 +15,10 @@ class DoubleEntryConversion(BinaryConversion):
         from Tribler.community.doubleentry.community import SIGNATURE_RESPONSE
 
         # Define Request Signature.
-        self.define_meta_message(chr(1), community.get_meta_message(SIGNATURE_REQUEST), lambda message: self._encode_decode(self._encode_signature_request, self._decode_signature_request, message), self._decode_signature_request)
-        self.define_meta_message(chr(2), community.get_meta_message(SIGNATURE_RESPONSE), lambda message: self._encode_decode(self._encode_signature_response, self._decode_signature_response, message), self._decode_signature_response)
-
-    def _encode_decode(self, encode, decode, message):
-        result = encode(message)
-        try:
-            decode(None, 0, result)
-
-        except DropPacket:
-            raise
-        except:
-            pass
-        return result
+        self.define_meta_message(chr(1), community.get_meta_message(SIGNATURE_REQUEST),
+                                 self._encode_signature_request, self._decode_signature_request)
+        self.define_meta_message(chr(2), community.get_meta_message(SIGNATURE_RESPONSE),
+                                 self._encode_signature_response, self._decode_signature_response)
 
     def _encode_signature_request(self, message):
         """
