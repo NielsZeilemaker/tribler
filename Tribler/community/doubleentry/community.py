@@ -251,6 +251,8 @@ class DoubleEntryCommunity(Community):
             # Invalid public key.
             return False
 
+    def get_key(self):
+        return self._ec
 
 class DoubleEntrySettings(object):
     """

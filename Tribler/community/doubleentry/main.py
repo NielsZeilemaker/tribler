@@ -14,6 +14,8 @@ from Tribler.Core.Utilities.twisted_thread import reactor
 from Tribler.community.doubleentry.community import DoubleEntryCommunity
 from Tribler.community.doubleentry.community import DoubleEntrySettings
 
+from Tribler.community.doubleentry.experiments import NumericalExample
+
 from twisted.internet.threads import blockingCallFromThread
 from twisted.internet.stdio import StandardIO
 from twisted.protocols.basic import LineReceiver
@@ -25,13 +27,13 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file_
 # Class that handles boot strapping the DoubleEntry Community.
 class DoubleEntry(object):
     """
-    Class that handles boot strapping the DoubleEntry Community when running a single community instance without Tribler.
+    Class that handles boot strapping the DoubleEntry Community
+    when running a single community instance without Tribler.
     """
 
     def __init__(self):
         """
         Setup this class to be able to run the community with the run method.
-        :return:
         """
         self.community = None
         self._member = None
@@ -80,6 +82,9 @@ class DoubleEntry(object):
 
         blockingCallFromThread(reactor, start_community)
 
+    def get_community(self):
+        return self.community
+
     def signature_request(self):
         """
         Instruct the community to send out a signature request.
@@ -94,16 +99,18 @@ class CommandHandler(LineReceiver):
     from os import linesep
     delimiter = linesep
 
-    def __init__(self, doubleentry):
-        self.doubleentry = doubleentry
+    def __init__(self, double_entry):
+        self.double_entry = double_entry
 
     def connectionMade(self):
         self.transport.write('>>> ')
 
-
     def lineReceived(self, line):
         if line == 'r':
-            self.doubleentry.signature_request()
+            self.double_entry.signature_request()
+        elif line == 'n':
+            experiment = NumericalExample(self.double_entry.get_community())
+            experiment.perform_experiment()
 
         self.transport.write('>>> ')
 
