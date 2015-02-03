@@ -115,10 +115,9 @@ class CommandHandler(LineReceiver):
         self.transport.write('>>> ')
 
 
-def main(argv):
+def main():
     """
     Main method to start a Double Entry community that listens to commandline input.
-    :param argv:
     """
     logging.config.fileConfig("logger.conf")
 
@@ -132,4 +131,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

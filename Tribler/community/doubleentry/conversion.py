@@ -54,7 +54,8 @@ class DoubleEntryConversion(BinaryConversion):
     def _encode_signature_response(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
         # Return (encoding,)
-        return encode((message.payload.timestamp, message.payload.public_key_requester, message.payload.signature_requester, message.payload.public_key_responder,
+        return encode((message.payload.timestamp, message.payload.public_key_requester, 
+                       message.payload.signature_requester, message.payload.public_key_responder,
                        message.payload.signature_responder)),
 
     def _decode_signature_response(self, placeholder, offset, data):
@@ -85,4 +86,5 @@ class DoubleEntryConversion(BinaryConversion):
         if not isinstance(signature_responder, str):
             raise DropPacket("Invalid type signature_request")
 
-        return offset, placeholder.meta.payload.implement(timestamp, public_key_requester, signature_requester, public_key_responder, signature_responder)
+        return offset, placeholder.meta.payload.implement(timestamp, public_key_requester, signature_requester,
+                                                          public_key_responder, signature_responder)

@@ -40,7 +40,10 @@ class DoubleEntryCommunity(Community):
         # generated: Wed Dec  3 10:31:16 2014
         # curve: NID_sect571r1
         # len: 571 bits ~ 144 bytes signature
-        # pub: 170 3081a7301006072a8648ce3d020106052b810400270381920004059f45b75d63f865e3c7b350bd3ccdc99dbfbf76fdfb524939f0702233ea9ea5d0536721cf9afbbec5693798e289b964fefc930961dfe1a7f71c445031434aba637bb93b947fb81603f649d4a08e5698e677059b9d3a441986c16f8da94d4aa2afbf10fe056cd65741108fe6a880606869ca81fdcb2db302ac15905d6e75f96b39ccdaf068bdbbda81a6356f53f7ce4e
+        # pub: 170  3081a7301006072a8648ce3d020106052b810400270381920004059f45b75d63f865e3c7b350bd3ccdc99dbfbf76f
+        #           dfb524939f0702233ea9ea5d0536721cf9afbbec5693798e289b964fefc930961dfe1a7f71c445031434aba637bb9
+        #           3b947fb81603f649d4a08e5698e677059b9d3a441986c16f8da94d4aa2afbf10fe056cd65741108fe6a880606869c
+        #           a81fdcb2db302ac15905d6e75f96b39ccdaf068bdbbda81a6356f53f7ce4e
         # pub-sha1 f66a50b35c4a0d45abd0052f574c5ecc233b8e54
         # -----BEGIN PUBLIC KEY-----
         # MIGnMBAGByqGSM49AgEGBSuBBAAnA4GSAAQFn0W3XWP4ZePHs1C9PM3Jnb+/dv37
@@ -48,7 +51,10 @@ class DoubleEntryCommunity(Community):
         # uBYD9knUoI5WmOZ3BZudOkQZhsFvjalNSqKvvxD+BWzWV0EQj+aogGBoacqB/cst
         # swKsFZBdbnX5aznM2vBovbvagaY1b1P3zk4=
         # -----END PUBLIC KEY-----
-        master_key = "3081a7301006072a8648ce3d020106052b81040027038192000406712a1e5381d030ae25697bd6626810af48ed5094e5faae18a8b91e482e60b8681b26bf6aca786ad81b207ffb5a755956b4d6353c9dc487eb1bfdd17b66bd0de444e01a375fcf3401177a7bb102da7c5f50ad9375fe4a1ae1baca9d47870f56c841169fc36c2b113bafbadacab9f2b3c7773b3d82a54cda8fbde41b9e0e571ba631997a8259cc78e7f262e933542b51"
+        master_key = "3081a7301006072a8648ce3d020106052b810400270381920004059f45b75d63f865e3c7b350bd3ccdc99dbfbf76f" + \
+                     "dfb524939f0702233ea9ea5d0536721cf9afbbec5693798e289b964fefc930961dfe1a7f71c445031434aba637bb9" + \
+                     "3b947fb81603f649d4a08e5698e677059b9d3a441986c16f8da94d4aa2afbf10fe056cd65741108fe6a880606869c" + \
+                     "a81fdcb2db302ac15905d6e75f96b39ccdaf068bdbbda81a6356f53f7ce4e"
         master_key_hex = master_key.decode("HEX")
         master = dispersy.get_member(public_key=master_key_hex)
         return [master]
@@ -224,10 +230,10 @@ class DoubleEntryCommunity(Community):
         """
         payload = message.payload
         # Prepare the data to be signed.
-        data = payload.timestamp + "." + payload.public_key_requester + "." + payload.signature_requester + "." + payload.public_key_responder + "." + payload.signature_responder
+        data = payload.timestamp + "." + payload.public_key_requester + "." + payload.signature_requester + "." + \
+            payload.public_key_responder + "." + payload.signature_responder
         # Create the hash using SHA1.
         return sha1(data).digest()
-
 
     @staticmethod
     def validate_signature(public_key_binary, payload, signature):
@@ -253,6 +259,7 @@ class DoubleEntryCommunity(Community):
 
     def get_key(self):
         return self._ec
+
 
 class DoubleEntrySettings(object):
     """
