@@ -28,7 +28,10 @@ class DoubleEntryCommunity(Community):
     def __init__(self, *args, **kwargs):
         super(DoubleEntryCommunity, self).__init__(*args, **kwargs)
         self._logger = logging.getLogger(self.__class__.__name__)
+
         self._ec = None
+        self._public_key = None
+
         self._persistence = InMemoryDB()
 
     def initialize(self, a=None, b=None):
@@ -36,6 +39,7 @@ class DoubleEntryCommunity(Community):
 
     def set_ec(self, ec):
         self._ec = ec
+        self._public_key = ECCrypto().key_to_bin(self._ec.pub())
 
     @classmethod
     def get_master_members(cls, dispersy):
@@ -99,13 +103,13 @@ class DoubleEntryCommunity(Community):
         meta = self.get_meta_message(SIGNATURE_REQUEST)
 
         timestamp = repr(time.time())
-        previous_hash = self._persistence.previous_id
-        public_key = ECCrypto().key_to_bin(self._ec.pub())
+        previous_hash_requester = self._persistence.previous_id
+        public_key_requester = self._public_key
         signature = ECCrypto().create_signature(self._ec, timestamp)
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
-                            payload=(timestamp, previous_hash, public_key, signature))
+                            payload=(timestamp, previous_hash_requester, public_key_requester, signature))
         return message
 
     def validate_signature_request(self, signature_request):
@@ -140,7 +144,9 @@ class DoubleEntryCommunity(Community):
         :param messages: Signature_request messages that needs to be handled.
         """
         for message in messages:
-            self.publish_signature_response_message(message)
+            # Check if the messages are not from ourselves.
+            if message.payload.public_key_requester != self._public_key:
+                self.publish_signature_response_message(message)
 
     def publish_signature_response_message(self, signature_request):
         """
