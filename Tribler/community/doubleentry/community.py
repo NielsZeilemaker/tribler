@@ -156,7 +156,7 @@ class DoubleEntryCommunity(Community):
         """
         self._logger.info("Sending signature response.")
         message = self.create_signature_response_message(signature_request)
-
+        self.persist_signature_response(message)
         self._dispersy.store_update_forward([message], True, True, True)
 
     def create_signature_response_message(self, signature_request):
