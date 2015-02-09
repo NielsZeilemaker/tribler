@@ -224,6 +224,7 @@ class DoubleEntryCommunity(Community):
         """
         message_hash = self.hash_signature_response(message)
         self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))
+        self._persistence.add_block(message_hash, message)
 
     @staticmethod
     def hash_signature_response(message):
