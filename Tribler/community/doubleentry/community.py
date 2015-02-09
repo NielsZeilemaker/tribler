@@ -163,18 +163,20 @@ class DoubleEntryCommunity(Community):
 
         # Create the part to be signed.
         timestamp = signature_request.payload.timestamp
+        previous_hash_requester = signature_request.payload.previous_hash_requester
         public_key_requester = signature_request.payload.public_key_requester
         signature_requester = signature_request.payload.signature_requester
         request = timestamp + "." + public_key_requester + "." + signature_requester
         # Create the personal part of the message.
+        previous_hash_responder = self._persistence.previous_id
         public_key_responder = ECCrypto().key_to_bin(self._ec.pub())
         # Sign the request.
         signature = ECCrypto().create_signature(self._ec, request)
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
-                            payload=(timestamp, public_key_requester, signature_requester, public_key_responder,
-                                     signature))
+                            payload=(timestamp, previous_hash_requester, public_key_requester, signature_requester,
+                                     previous_hash_responder, public_key_responder, signature))
         return message
 
     def validate_signature_response(self, signature_response):
@@ -219,7 +221,6 @@ class DoubleEntryCommunity(Community):
         Persist the signature response message.
         A hash will be created from the message and this will be used as an unique identifier.
         :param message:
-        :return:
         """
         message_hash = self.hash_signature_response(message)
         self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))

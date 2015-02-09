@@ -58,14 +58,15 @@ class DoubleEntryConversion(BinaryConversion):
     def _encode_signature_response(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.
         # Return (encoding,)
-        return encode((message.payload.timestamp, message.payload.public_key_requester, 
-                       message.payload.signature_requester, message.payload.public_key_responder,
+        return encode((message.payload.timestamp, message.payload.previous_hash_requester,
+                       message.payload.public_key_requester, message.payload.signature_requester,
+                       message.payload.previous_hash_responder, message.payload.public_key_responder,
                        message.payload.signature_responder)),
 
     def _decode_signature_response(self, placeholder, offset, data):
         try:
             offset, values = decode(data, offset)
-            if len(values) != 5:
+            if len(values) != 7:
                 raise ValueError
         except ValueError:
             raise DropPacket("Unable to decode the signature-response")
@@ -74,21 +75,30 @@ class DoubleEntryConversion(BinaryConversion):
         if not isinstance(timestamp, str):
             raise DropPacket("Invalid type timestamp")
 
-        public_key_requester = values[1]
+        previous_hash_requester = values[1]
+        if not isinstance(previous_hash_requester, str):
+            raise DropPacket("Invalid type previous_hash_requester")
+
+        public_key_requester = values[2]
         if not isinstance(public_key_requester, str):
             raise DropPacket("Invalid type public_key_requester")
 
-        signature_requester = values[2]
+        signature_requester = values[3]
         if not isinstance(signature_requester, str):
             raise DropPacket("Invalid type signature_request")
 
-        public_key_responder = values[3]
+        previous_hash_responder = values[4]
+        if not isinstance(previous_hash_responder, str):
+            raise DropPacket("Invalid type previous_hash_responder")
+
+        public_key_responder = values[5]
         if not isinstance(public_key_responder, str):
             raise DropPacket("Invalid type public_key_responder")
 
-        signature_responder = values[4]
+        signature_responder = values[6]
         if not isinstance(signature_responder, str):
             raise DropPacket("Invalid type signature_request")
 
-        return offset, placeholder.meta.payload.implement(timestamp, public_key_requester, signature_requester,
+        return offset, placeholder.meta.payload.implement(timestamp, previous_hash_requester, public_key_requester,
+                                                          signature_requester, previous_hash_responder,
                                                           public_key_responder, signature_responder)
