@@ -26,13 +26,13 @@ class DoubleEntryConversion(BinaryConversion):
         :param message: The message to be encoded.
         :return: encoded signature request message.
         """
-        return encode((message.payload.timestamp, message.payload.public_key_requester,
-                       message.payload.signature_requester)),
+        return encode((message.payload.timestamp, message.payload.previous_hash_requester,
+                       message.payload.public_key_requester, message.payload.signature_requester)),
 
     def _decode_signature_request(self, placeholder, offset, data):
         try:
             offset, values = decode(data, offset)
-            if len(values) != 3:
+            if len(values) != 4:
                 raise ValueError
         except ValueError:
             raise DropPacket("Unable to decode the signature-request")
@@ -41,15 +41,19 @@ class DoubleEntryConversion(BinaryConversion):
         if not isinstance(timestamp, str):
             raise DropPacket("Invalid type timestamp")
 
-        public_key = values[1]
+        previous_hash = values[1]
+        if not isinstance(previous_hash, str):
+            raise DropPacket("invalid type previous hash")
+
+        public_key = values[2]
         if not isinstance(timestamp, str):
             raise DropPacket("Invalid public_key")
 
-        signature_request = values[2]
+        signature_request = values[3]
         if not isinstance(signature_request, str):
             raise DropPacket("Invalid type signature_request")
 
-        return offset, placeholder.meta.payload.implement(timestamp, public_key, signature_request)
+        return offset, placeholder.meta.payload.implement(timestamp, previous_hash, public_key, signature_request)
 
     def _encode_signature_response(self, message):
         # Encode a tuple containing the timestamp, the signature of the requester and the responder.

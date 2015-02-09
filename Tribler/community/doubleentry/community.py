@@ -14,6 +14,7 @@ from Tribler.dispersy.conversion import DefaultConversion
 
 from Tribler.community.doubleentry.payload import SignatureRequestPayload, SignatureResponsePayload
 from Tribler.community.doubleentry.conversion import DoubleEntryConversion
+from Tribler.community.doubleentry.persistence import InMemoryDB
 
 SIGNATURE_REQUEST = u"de_signature_request"
 SIGNATURE_RESPONSE = u"de_signature_response"
@@ -28,6 +29,7 @@ class DoubleEntryCommunity(Community):
         super(DoubleEntryCommunity, self).__init__(*args, **kwargs)
         self._logger = logging.getLogger(self.__class__.__name__)
         self._ec = None
+        self._persistence = InMemoryDB()
 
     def initialize(self, a=None, b=None):
         super(DoubleEntryCommunity, self).initialize()
@@ -41,7 +43,7 @@ class DoubleEntryCommunity(Community):
         # curve: NID_sect571r1
         # len: 571 bits ~ 144 bytes signature
         # pub: 170  3081a7301006072a8648ce3d020106052b810400270381920004059f45b75d63f865e3c7b350bd3ccdc99dbfbf76f
-        #           dfb524939f0702233ea9ea5d0536721cf9afbbec5693798e289b964fefc930961dfe1a7f71c445031434aba637bb9
+        #           dfb524939f070223c3ea9ea5d0536721cf9afbbec5693798e289b964fefc930961dfe1a7f71c445031434aba637bb9
         #           3b947fb81603f649d4a08e5698e677059b9d3a441986c16f8da94d4aa2afbf10fe056cd65741108fe6a880606869c
         #           a81fdcb2db302ac15905d6e75f96b39ccdaf068bdbbda81a6356f53f7ce4e
         # pub-sha1 f66a50b35c4a0d45abd0052f574c5ecc233b8e54
@@ -97,12 +99,13 @@ class DoubleEntryCommunity(Community):
         meta = self.get_meta_message(SIGNATURE_REQUEST)
 
         timestamp = repr(time.time())
+        previous_hash = self._persistence.previous_id
         public_key = ECCrypto().key_to_bin(self._ec.pub())
         signature = ECCrypto().create_signature(self._ec, timestamp)
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
-                            payload=(timestamp, public_key, signature))
+                            payload=(timestamp, previous_hash, public_key, signature))
         return message
 
     def validate_signature_request(self, signature_request):
