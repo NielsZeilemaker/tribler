@@ -91,6 +91,11 @@ class DoubleEntry(object):
         """
         self.community.publish_signature_request_message()
 
+    def printCommunity(self):
+        """
+        Instruct the community to print out information.
+        """
+        print(self.community.toString())
 
 class CommandHandler(LineReceiver):
     """
@@ -111,6 +116,8 @@ class CommandHandler(LineReceiver):
         elif line == 'n':
             experiment = NumericalExample(self.double_entry.get_community())
             experiment.perform_experiment()
+        elif line == 'p':
+            self.double_entry.printCommunity()
 
         self.transport.write('>>> ')
 

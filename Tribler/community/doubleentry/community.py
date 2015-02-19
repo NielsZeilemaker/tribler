@@ -32,7 +32,7 @@ class DoubleEntryCommunity(Community):
         self._ec = None
         self._public_key = None
 
-        self._persistence = InMemoryDB()
+        self._persistence = None
 
     def initialize(self, a=None, b=None):
         super(DoubleEntryCommunity, self).initialize()
@@ -40,6 +40,7 @@ class DoubleEntryCommunity(Community):
     def set_ec(self, ec):
         self._ec = ec
         self._public_key = ECCrypto().key_to_bin(self._ec.pub())
+        self._persistence = InMemoryDB(self._public_key)
 
     @classmethod
     def get_master_members(cls, dispersy):
@@ -119,9 +120,10 @@ class DoubleEntryCommunity(Community):
         :return: Boolean containing the truth value of the validity of the message.
         """
         payload = signature_request.payload
-        # Check if the request is valid
-        return self.validate_signature(payload.public_key_requester, payload.timestamp,
-                                       payload.signature_requester)
+        # Check if the request is not already processed.
+        return (not self._persistence.contains_signature(payload.signature_requester, payload.public_key_requester) and
+                # Check if the request is valid
+                self.validate_signature(payload.public_key_requester, payload.timestamp, payload.signature_requester))
 
     def _check_signature_request(self, messages):
         """
@@ -271,6 +273,10 @@ class DoubleEntryCommunity(Community):
     def get_key(self):
         return self._ec
 
+    def toString(self):
+        result = "Node:" + base64.encodestring(self._public_key[:5]) + "\n"
+        result += self._persistence.toString() + "\n"
+        return result
 
 class DoubleEntrySettings(object):
     """
