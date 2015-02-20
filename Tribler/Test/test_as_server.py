@@ -1,32 +1,34 @@
 # Written by Arno Bakker, Jie Yang
 # Improved and Modified by Niels Zeilemaker
 # see LICENSE.txt for license information
-
-import unittest
-
-import os
-import sys
-import shutil
-import time
 import gc
-import wx
-import re
 import logging
-
-from traceback import print_exc
+import os
+import re
+import shutil
+import sys
+import time
+import unittest
 from threading import enumerate as enumerate_threads
+from traceback import print_exc
 
-from Tribler.Core.Session import Session
-from Tribler.Core.SessionConfig import SessionStartupConfig
+# set wxpython version before importing wx or anything from Tribler
+import wxversion
+wxversion.select("2.8-unicode")
 
-from nose.twistedtools import reactor
-
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__))))
-STATE_DIR = os.path.join(BASE_DIR, u"test_.Tribler")
-DEST_DIR = os.path.join(BASE_DIR, u"test_TriblerDownloads")
-FILES_DIR = os.path.abspath(os.path.join(BASE_DIR, u"data"))
+import wx
 
 from Tribler.Core import defaults
+from Tribler.Core.Session import Session
+from Tribler.Core.SessionConfig import SessionStartupConfig
+from Tribler.Core.Utilities.twisted_thread import reactor
+
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__))))
+STATE_DIR = os.path.join(BASE_DIR, u"_test_.Tribler")
+DEST_DIR = os.path.join(BASE_DIR, u"_test_TriblerDownloads")
+FILES_DIR = os.path.abspath(os.path.join(BASE_DIR, u"data"))
+
 defaults.sessdefaults['general']['state_dir'] = STATE_DIR
 defaults.sessdefaults['general']['minport'] = -1
 defaults.sessdefaults['general']['maxport'] = -1
@@ -68,9 +70,9 @@ class AbstractServer(unittest.TestCase):
 
         delayed_calls = reactor.getDelayedCalls()
         if delayed_calls:
-            print >> sys.stderr, "The reactor was dirty:"
+            self._logger.debug("The reactor was dirty:")
             for dc in delayed_calls:
-                print >> sys.stderr, ">     %s" % dc
+                self._logger.debug(">     %s" % dc)
         self.assertFalse(delayed_calls, "The reactor was dirty when tearing down the test")
 
     def tearDownCleanup(self):
@@ -80,8 +82,6 @@ class AbstractServer(unittest.TestCase):
         state_dir = STATE_DIR + (str(nr) if nr else '')
         if not os.path.exists(state_dir):
             os.mkdir(state_dir)
-        if os.path.isfile(u"bootstraptribler.txt"):
-            shutil.copy(u"bootstraptribler.txt", os.path.join(state_dir, u"bootstraptribler.txt"))
         return state_dir
 
     def getDestDir(self, nr=0):
@@ -141,12 +141,15 @@ class TestAsServer(AbstractServer):
     def setUpPreSession(self):
         """ Should set self.config_path and self.config """
         self.config = SessionStartupConfig()
+        self.config.set_tunnel_community_enabled(False)
+        self.config.set_tunnel_community_optin_dialog_shown(True)
         self.config.set_state_dir(self.getStateDir())
         self.config.set_torrent_checking(False)
         self.config.set_multicast_local_peer_discovery(False)
         self.config.set_megacache(False)
         self.config.set_dispersy(False)
         self.config.set_mainline_dht(False)
+        self.config.set_torrent_store(False)
         self.config.set_torrent_collecting(False)
         self.config.set_libtorrent(False)
         self.config.set_dht_torrent_collecting(False)
@@ -164,9 +167,9 @@ class TestAsServer(AbstractServer):
         gc.collect()
 
         ts = enumerate_threads()
-        print >> sys.stderr, "test_as_server: Number of threads still running", len(ts)
+        self._logger.debug("test_as_server: Number of threads still running %d", len(ts))
         for t in ts:
-            print >> sys.stderr, "test_as_server: Thread still running", t.getName(), "daemon", t.isDaemon(), "instance:", t
+            self._logger.debug("Thread still running %s, daemon: %s, instance: %s", t.getName(), t.isDaemon(), t)
 
         super(TestAsServer, self).tearDown(annotate=False)
 
@@ -179,10 +182,10 @@ class TestAsServer(AbstractServer):
             diff = time.time() - session_shutdown_start
             assert diff < waittime, "test_as_server: took too long for Session to shutdown"
 
-            print >> sys.stderr, "test_as_server: ONEXIT Waiting for Session to shutdown, will wait for an additional %d seconds" % (waittime - diff)
+            self._logger.debug("Waiting for Session to shutdown, will wait for an additional %d seconds", (waittime - diff))
             time.sleep(1)
 
-        print >> sys.stderr, "test_as_server: Session is shutdown"
+        self._logger.debug("Session has shut down")
 
     def assert_(self, boolean, reason=None, do_assert=True):
         if not boolean:
@@ -207,7 +210,8 @@ class TestAsServer(AbstractServer):
                 if time.time() - t < timeout:
                     try:
                         if condition():
-                            print >> sys.stderr, "test_as_server: condition satisfied after %d seconds, calling callback '%s'" % (time.time() - t, callback.__name__)
+                            self._logger.debug("condition satisfied after %d seconds, calling callback '%s'",
+                                               (time.time() - t), callback.__name__)
                             callback()
                         else:
                             self.Call(0.5, DoCheck)
@@ -216,7 +220,10 @@ class TestAsServer(AbstractServer):
                         print_exc()
                         self.assert_(False, 'Condition or callback raised an exception, quitting (%s)' % (assertMsg or "no-assert-msg"), do_assert=False)
                 else:
-                    print >> sys.stderr, "test_as_server: %s, condition was not satisfied in %d seconds (%s)" % ('calling callback' if assertCallback else 'quitting' , timeout, assertMsg or "no-assert-msg")
+                    self._logger.debug("%s, condition was not satisfied in %d seconds (%s)",
+                                       ('calling callback' if assertCallback else 'quitting'),
+                                        timeout,
+                                        assertMsg or "no-assert-msg")
                     assertcall = assertCallback if assertCallback else self.assert_
                     assertcall(False, assertMsg if assertMsg else "Condition was not satisfied in %d seconds" % timeout, do_assert=False)
         self.Call(0, DoCheck)
@@ -259,10 +266,11 @@ class TestGuiAsServer(TestAsServer):
             if do_assert:
                 assert boolean, reason
 
-    def startTest(self, callback, min_timeout=5, force_is_unit_testing=True):
+    def startTest(self, callback, min_timeout=5, autoload_discovery=True):
         from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
         from Tribler.Main import tribler_main
         tribler_main.ALLOW_MULTIPLE = True
+        tribler_main.SKIP_TUNNEL_DIALOG = True
 
         self.hadSession = False
         starttime = time.time()
@@ -275,33 +283,33 @@ class TestGuiAsServer(TestAsServer):
                 self.Call(min_timeout - took, callback)
 
         def wait_for_frame():
-            print >> sys.stderr, "tgs: GUIUtility ready, staring to wait for frame to be ready"
+            self._logger.debug("GUIUtility ready, starting to wait for frame to be ready")
             self.frame = self.guiUtility.frame
             self.frame.Maximize()
             self.CallConditional(30, lambda: self.frame.ready, call_callback)
 
         def wait_for_init():
-            print >> sys.stderr, "tgs: lm initcomplete, staring to wait for GUIUtility to be ready"
+            self._logger.debug("lm initcomplete, starting to wait for GUIUtility to be ready")
             self.guiUtility = GUIUtility.getInstance()
             self.CallConditional(30, lambda: self.guiUtility.registered, wait_for_frame)
 
         def wait_for_guiutility():
-            print >> sys.stderr, "tgs: waiting for guiutility instance"
+            self._logger.debug("waiting for guiutility instance")
             self.lm = self.session.lm
             self.CallConditional(30, lambda: GUIUtility.hasInstance(), wait_for_init)
 
         def wait_for_instance():
-            print >> sys.stderr, "tgs: found instance, staring to wait for lm to be initcomplete"
+            self._logger.debug("found instance, starting to wait for lm to be initcomplete")
             self.session = Session.get_instance()
             self.hadSession = True
             self.CallConditional(30, lambda: self.session.lm and self.session.lm.initComplete, wait_for_guiutility)
 
-        print >> sys.stderr, "tgs: waiting for session instance"
+        self._logger.debug("waiting for session instance")
         self.CallConditional(30, Session.has_instance, lambda: TestAsServer.startTest(self, wait_for_instance))
 
         # modify argv to let tribler think its running from a different directory
         sys.argv = [os.path.abspath('./.exe')]
-        tribler_main.run(is_unit_testing=force_is_unit_testing)
+        tribler_main.run(autoload_discovery=autoload_discovery)
 
         assert self.hadSession, 'Did not even create a session'
 
@@ -352,20 +360,21 @@ class TestGuiAsServer(TestAsServer):
         gc.collect()
 
         ts = enumerate_threads()
-        print >> sys.stderr, "teardown: Number of threads still running", len(ts)
-        for t in ts:
-            print >> sys.stderr, "teardown: Thread still running", t.getName(), "daemon", t.isDaemon(), "instance:", t
+        if ts:
+            self._logger.debug("Number of threads still running %s", len(ts))
+            for t in ts:
+                self._logger.debug("Thread still running %s, daemon %s, instance: %s", t.getName(), t.isDaemon(), t)
 
         dhtlog = os.path.join(STATE_DIR, 'pymdht.log')
         if os.path.exists(dhtlog):
-            print >> sys.stderr, "teardown: content of pymdht.log"
+            self._logger.debug("Content of pymdht.log")
             f = open(dhtlog, 'r')
             for line in f:
                 line = line.strip()
                 if line:
-                    print >> sys.stderr, line
+                    self._logger.debug("> %s", line)
             f.close()
-            print >> sys.stderr, "teardown: finished printing content of pymdht.log"
+            self._logger.debug("Finished printing content of pymdht.log")
 
         AbstractServer.tearDown(self, annotate=False)
 

@@ -42,6 +42,7 @@ For details see API.py
 STATEDIR_DLPSTATE_DIR = 'dlcheckpoints'
 STATEDIR_PEERICON_DIR = 'icons'
 STATEDIR_TORRENTCOLL_DIR = 'collected_torrent_files'
+STATEDIR_TORRENT_STORE_DIR = 'collected_torrents'
 
 STATEDIR_SESSCONFIG = 'libtribler.conf'
 
@@ -64,7 +65,6 @@ NTFY_VOTECAST = 'votecast'
 NTFY_CHANNELCAST = 'channelcast'
 NTFY_TUNNEL = 'tunnel'
 NTFY_TRACKERINFO = 'trackerinfo'
-NTFY_USEREVENTLOG = 'usereventlog'
 NTFY_BUNDLERPREFERENCE = "bundlepreference"
 
 # non data handler subjects
@@ -121,3 +121,9 @@ TRIBLER_TORRENT_EXT = ".tribe"  # Unused
 
 # Infohashes are always 20 byte binary strings
 INFOHASH_LENGTH = 20
+
+
+# SIGNALS
+SIGNAL_ALLCHANNEL = 'allchannel'
+SIGNAL_SEARCH_COMMUNITY = 'search_community'
+SIGNAL_ONSEARCHRESULTS = 'onsearchresults'

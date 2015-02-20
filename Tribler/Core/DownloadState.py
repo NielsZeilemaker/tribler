@@ -80,7 +80,6 @@ class DownloadState(Serializable):
                 self.status = DLSTATUS_SEEDING
             else:
                 self.status = DLSTATUS_DOWNLOADING
-            # print >>sys.stderr,"STATS IS",stats
 
             # Safe to store the stats dict. The stats dict is created per
             # invocation of the BT1Download returned statsfunc and contains no
@@ -104,7 +103,6 @@ class DownloadState(Serializable):
                         diff = tl - t
                         totalpieces += diff
 
-                # print >>sys.stderr,"DownloadState: get_pieces_complete",totalpieces
                 haveslice = [False] * totalpieces
                 have = 0
                 index = 0
@@ -330,11 +328,8 @@ class DownloadState(Serializable):
         if not self.length:
             files = self.get_selected_files()
 
-            cdef = self.download.get_def()
-            if cdef.get_def_type() == "torrent":
-                self.length = cdef.get_length(files)
-            else:
-                self.length = self.download.get_dynasize()
+            tdef = self.download.get_def()
+            self.length = tdef.get_length(files)
         return self.length
 
     def get_availability(self):

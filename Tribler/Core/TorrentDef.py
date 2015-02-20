@@ -16,7 +16,6 @@ from Tribler.Core.Utilities.bencode import bencode, bdecode
 import Tribler.Core.APIImplementation.maketorrent as maketorrent
 import Tribler.Core.APIImplementation.makeurl as makeurl
 from Tribler.Core.APIImplementation.miscutils import parse_playtime_to_secs
-import Tribler.Core.permid
 
 from Tribler.Core.Utilities.utilities import validTorrentFile, isValidURL, parse_magnetlink
 from Tribler.Core.Utilities.unicode import dunno2unicode
@@ -80,6 +79,7 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
     #
     # Class methods for creating a TorrentDef from a .torrent file
     #
+    @staticmethod
     def load(filename):
         """
         Load a BT .torrent or Tribler .tribe file from disk and convert
@@ -91,7 +91,6 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
         # Class method, no locking required
         f = open(filename, "rb")
         return TorrentDef._read(f)
-    load = staticmethod(load)
 
     @staticmethod
     def load_from_memory(data):
@@ -132,8 +131,6 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
 
         assert isinstance(t.infohash, str), "INFOHASH has invalid type: %s" % type(t.infohash)
         assert len(t.infohash) == INFOHASH_LENGTH, "INFOHASH has invalid length: %d" % len(t.infohash)
-
-        # print >>sys.stderr,"INFOHASH",`t.infohash`
 
         return t
 
@@ -215,21 +212,6 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
         """
         # Class method, no locking required
         return TorrentDef._create(metainfo)
-
-    #
-    # ContentDefinition interface
-    #
-    def get_def_type(self):
-        """ Returns the type of this Definition
-        @return string
-        """
-        return "torrent"
-
-    def get_id(self):
-        """ Returns a identifier for this Definition
-        @return string
-        """
-        return self.get_infohash()
 
     #
     # Convenience instance methods for publishing new content
@@ -734,7 +716,6 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
             add = (pl - diff) % pl
             newlen = int(length + add)
 
-            # print >>sys.stderr,"CHECK INFO LENGTH",secs,newlen
             d = self.input['files'][0]
             d['length'] = newlen
 
@@ -870,16 +851,6 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
         # We failed.  Returning an empty string
         return u""
 
-    def verify_torrent_signature(self):
-        """ Verify the signature on the finalized torrent definition. Returns
-        whether the signature was valid.
-        @return Boolean.
-        """
-        if self.metainfo_valid:
-            return Tribler.Core.permid.verify_torrent_signature(self.metainfo)
-        else:
-            raise TorrentDefNotFinalizedException()
-
     def save(self, filename):
         """
         Finalizes the torrent def and writes a torrent file i.e., bencoded dict
@@ -888,38 +859,14 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
 
         @param filename An absolute Unicode path name.
         """
-        if not self.readonly:
-            self.finalize()
-
-        # Boudewijn, 10/09/10: do not save the 'initial peers'.  (1)
-        # they should not be saved, as they are unlikely to be there
-        # the next time, and (2) bencode does not understand tuples
-        # and converts the (addres,port) tuple into a list.
-        if 'initial peers' in self.metainfo:
-            del self.metainfo['initial peers']
-
-        bdata = bencode(self.metainfo)
-        f = open(filename, "wb")
-        f.write(bdata)
-        f.close()
-
+        with open(filename, "wb") as f:
+            f.write(self.encode())
     def get_torrent_size(self):
         """
         Finalizes the torrent def and converts the metainfo to string, returns the
         number of bytes the string would take on disk.
         """
-        if not self.readonly:
-            self.finalize()
-
-        # Boudewijn, 10/09/10: do not save the 'initial peers'.  (1)
-        # they should not be saved, as they are unlikely to be there
-        # the next time, and (2) bencode does not understand tuples
-        # and converts the (addres,port) tuple into a list.
-        if 'initial peers' in self.metainfo:
-            del self.metainfo['initial peers']
-
-        bdata = bencode(self.metainfo)
-        return len(bdata)
+        return len(self.encode())
 
     def get_bitrate(self, file=None):
         """ Returns the bitrate of the specified file. If no file is specified,
@@ -932,6 +879,19 @@ class TorrentDef(ContentDefinition, Serializable, Copyable):
             raise NotYetImplementedException()  # must save first
 
         return maketorrent.get_bitrate_from_metainfo(file, self.metainfo)
+
+    def encode(self):
+        if not self.readonly:
+            self.finalize()
+
+        # Boudewijn, 10/09/10: do not save the 'initial peers'.  (1)
+        # they should not be saved, as they are unlikely to be there
+        # the next time, and (2) bencode does not understand tuples
+        # and converts the (addres,port) tuple into a list.
+        if 'initial peers' in self.metainfo:
+            del self.metainfo['initial peers']
+
+        return bencode(self.metainfo)
 
     def get_files_with_length(self, exts=None):
         """ The list of files in the finalized torrent def.
@@ -1152,12 +1112,6 @@ class TorrentDefNoMetainfo(ContentDefinition, Serializable, Copyable):
 
     def get_name(self):
         return self.name
-
-    def get_def_type(self):
-        return "torrent"
-
-    def get_id(self):
-        return self.get_infohash()
 
     def get_infohash(self):
         return self.infohash

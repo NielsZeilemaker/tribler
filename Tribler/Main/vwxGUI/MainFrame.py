@@ -17,27 +17,23 @@ import wx
 
 import subprocess
 import atexit
-import re
-import urlparse
 
 import threading
 import time
 from traceback import print_exc, print_stack
-import urllib
 import copy
 
 from Tribler.Category.Category import Category
 
 from Tribler.Core.version import version_id
-from Tribler.Core.simpledefs import (dlstatus_strings, NTFY_MYPREFERENCES, NTFY_ACT_NEW_VERSION, NTFY_ACT_NONE,
+from Tribler.Core.simpledefs import (NTFY_MYPREFERENCES, NTFY_ACT_NEW_VERSION, NTFY_ACT_NONE,
                                      NTFY_ACT_ACTIVE, NTFY_ACT_UPNP, NTFY_ACT_REACHABLE, NTFY_ACT_MEET,
                                      NTFY_ACT_GET_EXT_IP_FROM_PEERS, NTFY_ACT_GOT_METADATA, NTFY_ACT_RECOMMEND,
-                                     NTFY_ACT_DISK_FULL, DLSTATUS_SEEDING, DLSTATUS_ALLOCATING_DISKSPACE,
-                                     DLSTATUS_HASHCHECKING, DLSTATUS_WAITING4HASHCHECK, DOWNLOAD)
+                                     NTFY_ACT_DISK_FULL, DLSTATUS_ALLOCATING_DISKSPACE, DLSTATUS_HASHCHECKING,
+                                     DLSTATUS_WAITING4HASHCHECK, DOWNLOAD)
 from Tribler.Core.exceptions import DuplicateDownloadException
 from Tribler.Core.TorrentDef import TorrentDef, TorrentDefNoMetainfo
-from Tribler.Core.Utilities.bencode import bencode, bdecode
-from Tribler.Core.Utilities.utilities import parse_magnetlink
+from Tribler.Core.Utilities.utilities import parse_magnetlink, fix_torrent
 
 from Tribler.Main.globals import DefaultDownloadStartupConfig
 from Tribler.Main.Utility.GuiDBHandler import startWorker
@@ -122,7 +118,7 @@ class MainFrame(wx.Frame):
     def __init__(self, parent, channelonly, internalvideo, progress):
         self._logger = logging.getLogger(self.__class__.__name__)
 
-        print >> sys.stderr, 'GUI started'
+        self._logger.info('GUI started')
 
         # Do all init here
         self.ready = False
@@ -374,12 +370,12 @@ class MainFrame(wx.Frame):
         self.SetAcceleratorTable(wx.AcceleratorTable(accelerators))
 
         # Init video player
-        print >> sys.stderr, 'GUI ready'
+        progress('GUI complete')
+
         self.Thaw()
         self.ready = True
 
         def post():
-            self.checkVersion()
             self.startCMDLineTorrent()
 
         # If the user passed a torrentfile on the cmdline, load it.
@@ -417,8 +413,17 @@ class MainFrame(wx.Frame):
         name, infohash, _ = parse_magnetlink(url)
         if name is None:
             name = ""
-        tdef = TorrentDefNoMetainfo(infohash, name, url=url)
-        wx.CallAfter(self.startDownload, tdef=tdef, cmdline=cmdline, destdir=destdir, selectedFiles=selectedFiles, vodmode=vodmode, hops=0)
+        try:
+            if infohash is None:
+                raise RuntimeError("Missing infohash")
+            tdef = TorrentDefNoMetainfo(infohash, name, url=url)
+            wx.CallAfter(self.startDownload, tdef=tdef, cmdline=cmdline, destdir=destdir, selectedFiles=selectedFiles, vodmode=vodmode, hops=0)
+        except Exception, e:
+            # show an error dialog
+            dlg = wx.MessageBox(self, "The magnet link is invalid: %s" % str(e),
+                                "The magnet link is invalid", wx.OK | wx.ICON_ERROR)
+            dlg.ShowModal()
+            dlg.Destroy()
         return True
 
     def startDownloadFromUrl(self, url, destdir=None, cmdline=False, selectedFiles=None, vodmode=False, hops=0):
@@ -441,19 +446,44 @@ class MainFrame(wx.Frame):
         self.guiUtility.Notify("Download from url failed", icon=wx.ART_WARNING)
         return False
 
-    def startDownload(self, torrentfilename=None, destdir=None, tdef=None, cmdline=False, clicklog=None,
-                      name=None, vodmode=False, hops=0, try_hidden_services=False, fixtorrent=False, selectedFiles=None,
+    def startDownload(self, torrentfilename=None, destdir=None, infohash=None, tdef=None, cmdline=False,
+                      vodmode=False, hops=0, try_hidden_services=False, selectedFiles=None,
                       correctedFilename=None, hidden=False):
         self._logger.debug(u"startDownload: %s %s %s %s %s", torrentfilename, destdir, tdef, vodmode, selectedFiles)
 
-        if fixtorrent and torrentfilename:
-            self.fixTorrent(torrentfilename)
+        # TODO(lipu): remove the assertions after it becomes stable
+        if infohash is not None:
+            assert isinstance(infohash, str), "infohash type: %s" % type(infohash)
+            assert len(infohash) == 20, "infohash length is not 20: %s, %s" % (len(infohash), infohash)
+
+        # the priority of the parameters is: (1) tdef, (2) infohash, (3) torrent_file.
+        # so if we have tdef, infohash and torrent_file will be ignored, and so on.
+        if tdef is None:
+            if infohash is not None:
+                # try to get the torrent from torrent_store if the infohash is provided
+                torrent_data = self.utility.session.get_collected_torrent(infohash)
+                if torrent_data is not None:
+                    # use this torrent data for downloading
+                    tdef = TorrentDef.load_from_memory(torrent_data)
+
+            if tdef is None:
+                assert torrentfilename is not None, "torrent file must be provided if tdef and infohash are not given"
+                # try to get the torrent from the given torrent file
+                torrent_data = fix_torrent(torrentfilename)
+                if torrent_data is None:
+                    # show error message: could not open torrent file
+                    dlg = wx.MessageBox(self, "Could not open torrent file %s" % torrentfilename,
+                                        "Error", wx.OK | wx.ICON_ERROR)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    return
+
+                tdef = TorrentDef.load_from_memory(torrent_data)
+
+        assert tdef is not None, "tdef MUST not be None after loading torrent"
 
         try:
-            if torrentfilename and tdef is None:
-                tdef = TorrentDef.load(torrentfilename)
-
-            d = self.utility.session.get_download(tdef.get_id())
+            d = self.utility.session.get_download(tdef.get_infohash())
             if d:
                 new_trackers = list(set(tdef.get_trackers_as_single_tuple()) - set(d.get_def().get_trackers_as_single_tuple()))
                 if not new_trackers:
@@ -466,7 +496,7 @@ class MainFrame(wx.Frame):
                         dialog = wx.MessageDialog(None, 'This torrent is already being downloaded. Do you wish to load the trackers from it?', 'Tribler', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
                         if dialog.ShowModal() == wx.ID_YES:
                             # Update trackers
-                            self.utility.session.update_trackers(cdef.get_id(), new_trackers)
+                            self.utility.session.update_trackers(tdef.get_infohash(), new_trackers)
                         dialog.Destroy()
 
                     do_gui()
@@ -526,7 +556,7 @@ class MainFrame(wx.Frame):
                 metainfo = copy.deepcopy(tdef.metainfo)
                 metainfo['info']['anonymous'] = 1
                 orig_tdef = tdef
-                cdef = tdef = TorrentDef._create(metainfo)
+                tdef = TorrentDef._create(metainfo)
             else:
                 monitorHiddenSerivcesProgress = False
 
@@ -558,7 +588,7 @@ class MainFrame(wx.Frame):
                 if vodmode:
                     self._logger.info('MainFrame: startDownload: Starting in VOD mode')
                     result = self.utility.session.start_download(tdef, dscfg)
-                    self.guiUtility.library_manager.playTorrent(tdef.get_id(), videofiles[0] if len(videofiles) == 1 else None)
+                    self.guiUtility.library_manager.playTorrent(tdef.get_infohash(), videofiles[0] if len(videofiles) == 1 else None)
 
                 else:
                     if selectedFiles:
@@ -573,10 +603,6 @@ class MainFrame(wx.Frame):
                     if monitorHiddenSerivcesProgress:
                         state_lambda = lambda ds, tdef = orig_tdef, dscfg = dscfg, selectedFiles = selectedFiles: self.monitorHiddenSerivcesProgress(ds, tdef, dscfg, selectedFiles)
                         result.set_state_callback(state_lambda, delay=40.0)
-
-                if clicklog is not None:
-                    mypref = self.utility.session.open_dbhandler(NTFY_MYPREFERENCES)
-                    startWorker(None, mypref.addClicklogToMyPreference, wargs=(tdef.get_id(), clicklog))
 
                 return result
 
@@ -608,30 +634,6 @@ class MainFrame(wx.Frame):
 
         return None
 
-    def modifySelection(self, download, selectedFiles):
-        download.set_selected_files(selectedFiles)
-
-    def fixTorrent(self, filename):
-        f = open(filename, "rb")
-        bdata = f.read()
-        f.close()
-
-        # Check if correct bdata
-        try:
-            bdecode(bdata)
-        except ValueError:
-            # Try reading using sloppy
-            try:
-                bdata = bencode(bdecode(bdata, 1))
-                # Overwrite with non-sloppy torrent
-                f = open(filename, "wb")
-                f.write(bdata)
-                f.close()
-            except:
-                return False
-
-        return True
-
     def monitorHiddenSerivcesProgress(self, ds, tdef, dscfg, selectedFiles):
         if ds.get_status() in [DLSTATUS_ALLOCATING_DISKSPACE, DLSTATUS_HASHCHECKING, DLSTATUS_WAITING4HASHCHECK]:
             return (5.0, True)
@@ -662,203 +664,6 @@ class MainFrame(wx.Frame):
 
             self._logger.info("Allowing refresh in 3 seconds %s", long(time.time() + 3))
             self.librarylist.GetManager().prev_refresh_if = time.time() - 27
-
-    def checkVersion(self):
-        self.guiserver.add_task(self._checkVersion, 5.0)
-
-    def _checkVersion(self):
-        # Called by GUITaskQueue thread
-        my_version = self.utility.getVersion()
-        try:
-            curr_status = urllib.urlopen('http://tribler.org/version').readlines()
-            line1 = curr_status[0]
-            if len(curr_status) > 1:
-                self.update_url = curr_status[1].strip()
-            else:
-                self.update_url = 'http://tribler.org'
-
-            info = {}
-            if len(curr_status) > 2:
-                # the version file contains additional information in
-                # "KEY:VALUE\n" format
-                pattern = re.compile("^\s*(?<!#)\s*([^:\s]+)\s*:\s*(.+?)\s*$")
-                for line in curr_status[2:]:
-                    match = pattern.match(line)
-                    if match:
-                        key, value = match.group(1, 2)
-                        if key in info:
-                            info[key] += "\n" + value
-                        else:
-                            info[key] = value
-
-            _curr_status = line1.split()
-            self.curr_version = _curr_status[0]
-            if self.newversion(self.curr_version, my_version):
-                # Arno: we are a separate thread, delegate GUI updates to MainThread
-                self.upgradeCallback()
-
-                # Boudewijn: start some background downloads to
-                # upgrade on this separate thread
-                if len(info) > 0:
-                    self._upgradeVersion(my_version, self.curr_version, info)
-                else:
-                    self._manualUpgrade(my_version, self.curr_version, self.update_url)
-
-            # Also check new version of web2definitions for youtube etc. search
-            # Web2Updater(self.utility).checkUpdate()
-        except Exception as e:
-            self._logger.error("Tribler: Version check failed %s %s", time.ctime(time.time()), str(e))
-            # print_exc()
-
-    def _upgradeVersion(self, my_version, latest_version, info):
-        # check if there is a .torrent for our OS
-        torrent_key = "torrent-%s" % sys.platform
-        notes_key = "notes-txt-%s" % sys.platform
-        if torrent_key in info:
-            self._logger.info("-- Upgrade %s -> %s", my_version, latest_version)
-            notes = []
-            if "notes-txt" in info:
-                notes.append(info["notes-txt"])
-            if notes_key in info:
-                notes.append(info[notes_key])
-            notes = "\n".join(notes)
-            if notes:
-                for line in notes.split("\n"):
-                    self._logger.info("-- Notes: %s", line)
-            else:
-                notes = "No release notes found"
-            self._logger.info("-- Downloading %s for upgrade", info[torrent_key])
-
-            # prepare directort and .torrent file
-            location = os.path.join(self.utility.session.get_state_dir(), "upgrade")
-            if not os.path.exists(location):
-                os.mkdir(location)
-            self._logger.info("-- Dir: %s", location)
-            filename = os.path.join(location, os.path.basename(urlparse.urlparse(info[torrent_key])[2]))
-            self._logger.info("-- File: %s", filename)
-            if not os.path.exists(filename):
-                urllib.urlretrieve(info[torrent_key], filename)
-
-            # torrent def
-            tdef = TorrentDef.load(filename)
-            defaultDLConfig = DefaultDownloadStartupConfig.getInstance()
-            dscfg = defaultDLConfig.copy()
-
-            # figure out what file to start once download is complete
-            files = tdef.get_files_as_unicode()
-            executable = None
-            for file_ in files:
-                if sys.platform == "win32" and file_.endswith(u".exe"):
-                    self._logger.info("-- exe: %s", file_)
-                    executable = file_
-                    break
-
-                elif sys.platform == "linux2" and file_.endswith(u".deb"):
-                    self._logger.info("-- deb: %s", file_)
-                    executable = file_
-                    break
-
-                elif sys.platform == "darwin" and file_.endswith(u".dmg"):
-                    self._logger.info("-- dmg: %s", file_)
-                    executable = file_
-                    break
-
-            if not executable:
-                self._logger.info("-- Abort upgrade: no file found")
-                return
-
-            # start download
-            try:
-                download = self.utility.session.start_download(tdef)
-
-            except DuplicateDownloadException:
-                self._logger.error("-- Duplicate download")
-                download = None
-                for random_download in self.utility.session.get_downloads():
-                    if random_download.get_def().get_infohash() == tdef.get_infohash():
-                        download = random_download
-                        break
-
-            # continue until download is finished
-            if download:
-                def start_upgrade():
-                    """
-                    Called by python when everything is shutdown.  We
-                    can now start the downloaded file that will
-                    upgrade tribler.
-                    """
-                    executable_path = os.path.join(download.get_dest_dir(), executable)
-
-                    if sys.platform == "win32":
-                        args = [executable_path]
-
-                    elif sys.platform == "linux2":
-                        args = ["gdebi-gtk", executable_path]
-
-                    elif sys.platform == "darwin":
-                        args = ["open", executable_path]
-
-                    self._logger.info("-- Tribler closed, starting upgrade")
-                    self._logger.info("-- Start: %s", args)
-                    subprocess.Popen(args)
-
-                def wxthread_upgrade():
-                    """
-                    Called on the wx thread when the .torrent file is
-                    downloaded.  Will ask the user if Tribler can be
-                    shutdown for the upgrade now.
-                    """
-                    if self.Close():
-                        atexit.register(start_upgrade)
-                    else:
-                        self.shutdown_and_upgrade_notes = None
-
-                def state_callback(state):
-                    """
-                    Called every n seconds with an update on the
-                    .torrent download that we need to upgrade
-                    """
-                    self._logger.debug("-- State: %s %s", dlstatus_strings[state.get_status()], state.get_progress())
-                    # todo: does DLSTATUS_STOPPED mean it has completely downloaded?
-                    if state.get_status() == DLSTATUS_SEEDING:
-                        self.shutdown_and_upgrade_notes = notes
-                        wx.CallAfter(wxthread_upgrade)
-                        return (0.0, False)
-                    return (1.0, False)
-
-                download.set_state_callback(state_callback)
-
-    @forceWxThread
-    def _manualUpgrade(self, my_version, latest_version, url):
-        dialog = wx.MessageDialog(self, 'There is a new version of Tribler.\nYour version:\t\t\t\t%s\nLatest version:\t\t\t%s\n\nPlease visit %s to upgrade.' % (my_version, latest_version, url), 'New version of Tribler is available', wx.OK | wx.ICON_INFORMATION)
-        dialog.ShowModal()
-
-    def newversion(self, curr_version, my_version):
-        curr = curr_version.split('.')
-        my = my_version.split('.')
-        if len(my) >= len(curr):
-            nversion = len(my)
-        else:
-            nversion = len(curr)
-        for i in range(nversion):
-            if i < len(my):
-                my_v = int(my[i])
-            else:
-                my_v = 0
-            if i < len(curr):
-                curr_v = int(curr[i])
-            else:
-                curr_v = 0
-            if curr_v > my_v:
-                return True
-            elif curr_v < my_v:
-                return False
-        return False
-
-    @forceWxThread
-    def upgradeCallback(self):
-        self.setActivity(NTFY_ACT_NEW_VERSION)
-        wx.CallLater(6000, self.upgradeCallback)
 
     # Force restart of Tribler
     @forceWxThread
@@ -1050,7 +855,7 @@ class MainFrame(wx.Frame):
             except:
                 print_exc()
 
-        print >> sys.stderr, 'GUI closing'
+        self._logger.info('GUI closing')
         self.utility.abcquitting = True
         self.GUIupdate = False
 
@@ -1086,7 +891,7 @@ class MainFrame(wx.Frame):
         for t in ts:
             self._logger.info("mainframe: Thread still running %s daemon %s", t.getName(), t.isDaemon())
 
-        print >> sys.stderr, 'GUI closed'
+        self._logger.info('GUI closed')
 
     @forceWxThread
     def onWarning(self, exc):
@@ -1136,7 +941,6 @@ class MainFrame(wx.Frame):
 
     def setActivity(self, type, msg=u'', arg2=None):
         try:
-            # print >>sys.stderr,"MainFrame: setActivity: t",type,"m",msg,"a2",arg2
             if self.utility is None:
                 self._logger.debug("MainFrame: setActivity: Cannot display: t %s m %s a2 %s", type, msg, arg2)
                 return

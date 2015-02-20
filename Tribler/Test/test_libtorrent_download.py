@@ -5,6 +5,8 @@ import os
 from time import time
 
 import binascii
+
+from Tribler.Core.simpledefs import DOWNLOAD
 from Tribler.Test.test_as_server import TestGuiAsServer, BASE_DIR
 
 
@@ -18,7 +20,7 @@ class TestLibtorrentDownload(TestGuiAsServer):
             self.quit()
 
         def item_shown_in_list():
-            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.progress > 0, make_screenshot, 'no download progress')
+            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
 
         def download_object_ready():
             self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(infohash), item_shown_in_list, 'no download in librarylist')
@@ -39,7 +41,7 @@ class TestLibtorrentDownload(TestGuiAsServer):
             self.quit()
 
         def item_shown_in_list():
-            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.progress > 0, make_screenshot, 'no download progress')
+            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
 
         def download_object_ready():
             self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(infohash), item_shown_in_list, 'no download in librarylist')
@@ -60,7 +62,7 @@ class TestLibtorrentDownload(TestGuiAsServer):
             self.quit()
 
         def item_shown_in_list():
-            self.CallConditional(60, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.progress > 0, make_screenshot, 'no download progress')
+            self.CallConditional(60, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
 
         def download_object_ready():
             self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(infohash), item_shown_in_list, 'no download in librarylist')
@@ -139,7 +141,7 @@ class TestLibtorrentDownload(TestGuiAsServer):
             playlist = self.guiUtility.frame.actlist.expandedPanel_videoplayer
 
             do_check = lambda: len(playlist.links) == len(videofiles) and \
-                playlist.tdef.get_id() == VideoPlayer.getInstance().get_vod_download().get_def().get_id() and \
+                playlist.tdef.get_infohash() == VideoPlayer.getInstance().get_vod_download().get_def().get_infohash() and \
                 playlist.fileindex == VideoPlayer.getInstance().get_vod_fileindex()
 
             self.CallConditional(10, do_check, lambda: self.Call(5, lambda: take_screenshot(buffer_complete)), "playlist set incorrectly")
@@ -153,7 +155,12 @@ class TestLibtorrentDownload(TestGuiAsServer):
         def do_vod():
             from Tribler.Core.Video.VideoPlayer import VideoPlayer
 
-            self.frame.startDownload(os.path.join(BASE_DIR, "data", "Pioneer.One.S01E06.720p.x264-VODO.torrent"), self.getDestDir(), selectedFiles=[os.path.join('Sample', 'Pioneer.One.S01E06.720p.x264.Sample-VODO.mkv')], vodmode=True)
+            ds = self.frame.startDownload(os.path.join(BASE_DIR, "data", "Pioneer.One.S01E06.720p.x264-VODO.torrent"),
+                                          self.getDestDir(),
+                                          selectedFiles=[os.path.join('Sample', 'Pioneer.One.S01E06.720p.x264.Sample-VODO.mkv')],
+                                          vodmode=True)
+            # set the max prebuffsize to be smaller so that the unit test runs faster
+            ds.max_prebuffsize = 16 * 1024
             self.guiUtility.ShowPlayer()
             self.CallConditional(30, lambda: VideoPlayer.getInstance().get_vod_download(), do_monitor, "VOD download not found")
 

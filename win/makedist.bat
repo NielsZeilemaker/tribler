@@ -86,7 +86,7 @@ copy C:\WINDOWS\WinSxS\%CRTFULLNAME%\msvcp90.dll .
 %PYTHONHOME%\python.exe -O Tribler\Main\Build\Win32\setuptribler.py py2exe
 
 REM Arno: Move py2exe results to installdir
-move dist\*.* dist\installdir
+move dist\* dist\installdir
 
 copy Tribler\Main\Build\Win32\tribler*.nsi dist\installdir
 copy Tribler\Main\Build\Win32\tribler.exe.manifest dist\installdir
@@ -126,7 +126,7 @@ mkdir dist\installdir\Tribler\community\tunnel\crypto
 copy Tribler\community\tunnel\crypto\curves.ec dist\installdir\Tribler\community\tunnel\crypto
 
 copy logger.conf dist\installdir
-copy ffmpeg.exe dist\installdir
+copy C:\Build\ffmpeg-20150107-git-919e038-win32-static\bin\ffmpeg.exe dist\installdir
 xcopy vlc dist\installdir\vlc /E /I
 copy vlc.py dist\installdir\vlc.py
 

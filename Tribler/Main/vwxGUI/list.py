@@ -12,7 +12,7 @@ from colorsys import hsv_to_rgb, rgb_to_hsv
 
 from Tribler.Category.Category import Category
 
-from Tribler.Core.simpledefs import (NTFY_MISC, NTFY_USEREVENTLOG, DLSTATUS_STOPPED, DLSTATUS_STOPPED_ON_ERROR,
+from Tribler.Core.simpledefs import (NTFY_MISC, DLSTATUS_STOPPED, DLSTATUS_STOPPED_ON_ERROR,
                                      DLSTATUS_WAITING4HASHCHECK, DLSTATUS_HASHCHECKING)
 from Tribler.Core.exceptions import NotYetImplementedException
 
@@ -122,7 +122,7 @@ class RemoteSearchManager(BaseManager):
             self.oldkeywords = keywords
 
     def NewResult(self, keywords):
-        if self.oldkeywords == keywords:
+        if self and self.list and self.oldkeywords == keywords:
             self.list.NewResult()
 
     def refresh(self, remote=False):
@@ -476,7 +476,6 @@ class List(wx.BoxSizer):
         self.cur_nr_filtered = 0
 
         self.guiutility = GUIUtility.getInstance()
-        self.uelog = self.guiutility.utility.session.open_dbhandler(NTFY_USEREVENTLOG)
         self.category = Category.getInstance()
 
         self.leftLine = self.rightLine = None
@@ -825,7 +824,7 @@ class List(wx.BoxSizer):
 
     def GetFFilterMessage(self):
         if self.guiutility.getFamilyFilter() and self.nr_filtered:
-            return None, '%d items were blocked by the Familiy filter' % self.nr_filtered
+            return None, '%d items were blocked by the Family filter' % self.nr_filtered
         return None, ''
 
     def MatchFilter(self, item):
@@ -954,8 +953,8 @@ class SizeList(List):
         dsdict = {}
         old_dsdict = {}
         for ds in dslist:
-            id = ds.get_download().get_def().get_id()
-            dsdict[id] = ds
+            infohash = ds.get_download().get_def().get_infohash()
+            dsdict[infohash] = ds
 
         curStates = {}
         didStateChange = False
@@ -983,7 +982,7 @@ class SizeList(List):
                     original_data.magnetstatus = None
 
                 if item:  # torrents in raw_data and items are not equal
-                    item.original_data.dslist = original_data.dslist
+                    item.original_data.download_state = original_data.download_state
                     item.original_data.magnetstatus = original_data.magnetstatus
 
                 curState = curStates[infohash] = original_data.state, original_data.magnetState
@@ -1100,7 +1099,7 @@ class GenericSearchList(SizeList):
         item = event.GetEventObject().item
         key = self.infohash2key.get(item.original_data.infohash, item.original_data.infohash)
         self.Select(key)
-        self.StartDownload(item.original_data)
+        self.guiutility.torrentsearch_manager.downloadTorrent(item.original_data)
 
         button = event.GetEventObject()
         button.Enable(False)
@@ -1199,8 +1198,8 @@ class GenericSearchList(SizeList):
 
             # we need to merge the dslist from the current item
             prevItem = self.list.GetItem(head.infohash)
-            if prevItem.original_data.ds:
-                original_data.dslist = prevItem.original_data.dslist
+            if prevItem.original_data.download_state:
+                original_data.download_state = prevItem.original_data.download_state
 
             # Update primary columns with new data
             if DEBUG_RELEVANCE:
@@ -1238,72 +1237,6 @@ class GenericSearchList(SizeList):
     def ResetBottomWindow(self):
         detailspanel = self.guiutility.SetBottomSplitterWindow(SearchInfoPanel)
         detailspanel.Set(len(self.list.raw_data) if self.list.raw_data else 0)
-
-    @forceWxThread
-    def StartDownload(self, torrent, files=None):
-        from Tribler.Main.vwxGUI.channel import SelectedChannelList
-        from list_bundle import BundleListView
-
-        # vliegendhart: Logging relevance ranking stats
-        def relevance_ranking_msg():
-            infohash = torrent.infohash
-
-            main_searchlist = self.guiutility.frame.searchlist
-            header = main_searchlist.header
-
-            bundlestate = main_searchlist.header.bundlestate
-            selected_bundle_mode = header.selected_bundle_mode
-            bundlestate_str = header.bundlestates_str[bundlestate]
-            selected_bundle_mode_str = header.bundlestates_str.get(selected_bundle_mode, None)
-
-            pos_visual = None
-            subpos_visual = None
-            subpos_hits = None
-
-            if isinstance(self, BundleListView):
-                bundlelistitem = main_searchlist.GetItem(infohash)
-
-                pos_visual = main_searchlist.GetItemPos(infohash)
-                subpos_visual = self.GetItemPos(infohash)
-                try:
-                    subpos_hits = bundlelistitem.bundle[1:].index(torrent)
-                except:
-                    pass
-            else:
-                pos_visual = self.GetItemPos(infohash)
-
-            hits = self.guiutility.torrentsearch_manager.hits
-            try:
-                hits_pos = hits.index(torrent)
-                hits_old_pos = sorted(hits, key=lambda hit: hit.relevance_score[-1], reverse=True).index(torrent)
-            except:
-                hits_pos = None
-                hits_old_pos = None
-
-            keywords = self.guiutility.torrentsearch_manager.getSearchKeywords()[0]
-            query = ' '.join(keywords)
-
-            return \
-                'RelevanceRanking: pos/subpos_v/subpos_h: %s/%s/%s; hits_pos: %s; hits_old_pos: %s; bundle: %s/%s [%s/%s]; family: %s; relevance: %s; q=%s' \
-            % (pos_visual, subpos_visual, subpos_hits,
-               hits_pos, hits_old_pos,
-               bundlestate, selected_bundle_mode, bundlestate_str, selected_bundle_mode_str,
-               self.guiutility.getFamilyFilter(), torrent.relevance_score, query)
-
-        relevance_msg = relevance_ranking_msg()
-
-        def db_callback():
-            if isinstance(self, SelectedChannelList):
-                self.uelog.addEvent(message="Torrent: torrent download from channel", type=2)
-            elif isinstance(self, BundleListView):
-                self.uelog.addEvent(message="Torrent: torrent download from bundle", type=2)
-            else:
-                self.uelog.addEvent(message="Torrent: torrent download from other", type=2)
-
-            self.uelog.addEvent(message=relevance_msg, type=4)
-
-        startWorker(None, db_callback, retryOnBusy=True)
-        return self.guiutility.torrentsearch_manager.downloadTorrent(torrent, selectedFiles=files)
 
     def InList(self, key):
         key = self.infohash2key.get(key, key)
@@ -1556,7 +1489,6 @@ class SearchList(GenericSearchList):
             self.guiutility.frame.top_bg.SetFinished()
 
             def db_callback(keywords):
-                self.uelog.addEvent(message="Search: nothing found for query: " + " ".join(keywords), type=2)
                 self.GetManager().showSearchSuggestions(keywords)
 
             if self.nr_results == 0 and self.nr_filtered == 0:
@@ -1777,6 +1709,10 @@ class LibraryList(SizeList):
 
     @warnWxThread
     def RefreshItems(self, dslist, magnetlist):
+        # Yeah, I know...
+        if not self:
+            return
+
         didStateChange, _, newDS = SizeList.RefreshItems(self, dslist, magnetlist, rawdata=True)
 
         newFilter = self.newfilter
@@ -1803,8 +1739,8 @@ class LibraryList(SizeList):
 
         for infohash, item in self.list.items.iteritems():
             ds = item.original_data.ds
-            id = ds.get_download().get_def().get_id() if ds else None
-            if True or newFilter or not self.__ds__eq__(ds, self.oldDS.get(id, None)):
+            infohash = ds.get_download().get_def().get_infohash() if ds else None
+            if True or newFilter or not self.__ds__eq__(ds, self.oldDS.get(infohash, None)):
                 if ds and hasattr(item, 'progressPanel'):
                     progress = item.progressPanel.Update(item.original_data)
                     item.data[1] = progress
@@ -1813,7 +1749,7 @@ class LibraryList(SizeList):
 
                 tooltip = ''
                 if ds:
-                    torrent_ds = item.original_data.dslist[0]
+                    torrent_ds = item.original_data.download_state
 
                     # Set torrent seeding time and ratio
                     if torrent_ds and torrent_ds.get_seeding_statistics():
@@ -1864,8 +1800,8 @@ class LibraryList(SizeList):
                 item.RefreshColumn(9, 'Yes' if ds and ds.get_download() and ds.get_download().get_anon_mode() else 'No')
 
                 # For updating torrent icons
-                torrent_ds = item.original_data.dslist[0]
-                torrent_enabled = bool(torrent_ds) and torrent_ds.get_download().get_def().get_def_type() == 'torrent' and \
+                torrent_ds = item.original_data.download_state
+                torrent_enabled = bool(torrent_ds) and \
                                   torrent_ds.get_status() not in [DLSTATUS_WAITING4HASHCHECK, DLSTATUS_HASHCHECKING, DLSTATUS_STOPPED, DLSTATUS_STOPPED_ON_ERROR]
                 item.icons[0].Show(torrent_enabled)
 
@@ -1879,14 +1815,19 @@ class LibraryList(SizeList):
             self.oldDS.pop(infohash)
 
     @warnWxThread
-    def RefreshBandwidthHistory(self, dslist, magnetlist):
+    def RefreshBandwidthHistory(self, _, magnetlist):
+        # Avoid WxPyDeadObject exceptions
+        if not (self and self.list and self.list.items):
+            return
+
         for item in self.list.items.itervalues():
             # Store bandwidth history in self.bw_history
             self.bw_history_counter += 1
             if self.bw_history_counter % 5 == 0:
                 ds = item.original_data.ds
                 self.bw_history[item.original_data.infohash] = self.bw_history.get(item.original_data.infohash, [])
-                self.bw_history[item.original_data.infohash].append((ds.get_current_speed('up') / 1024 if ds else 0, ds.get_current_speed('down') / 1024 if ds else 0))
+                self.bw_history[item.original_data.infohash].append((ds.get_current_speed('up') / 1024 if ds else 0,
+                                                                     ds.get_current_speed('down') / 1024 if ds else 0))
                 self.bw_history[item.original_data.infohash] = self.bw_history[item.original_data.infohash][-120:]
 
 
@@ -2313,8 +2254,11 @@ class ActivitiesList(List):
             self.notifyTimer = wx.CallLater(1000, self.HideNotify)
         else:
             def DoHide():
-                self.notifyPanel.Hide()
-                self.Layout()
+                # Avoid WxPyDeadObject exceptions
+                if self:
+                    if self.notifyPanel:
+                        self.notifyPanel.Hide()
+                    self.Layout()
             self.notifyTimer = None
             wx.CallLater(500, DoHide)
 

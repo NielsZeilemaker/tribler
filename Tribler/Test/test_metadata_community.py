@@ -65,7 +65,7 @@ class TestMetadataCommunity(TestGuiAsServer):
         def get_and_modify_dispersy():
             from Tribler.dispersy.endpoint import NullEndpoint
 
-            print >> sys.stderr, "tgs: frame ready, replacing dispersy endpoint"
+            self._logger.debug("Frame ready, replacing dispersy endpoint")
             dispersy = self.session.get_dispersy_instance()
             dispersy._endpoint = NullEndpoint()
             dispersy._endpoint.open(dispersy)
@@ -107,7 +107,7 @@ class TestMetadataCommunity(TestGuiAsServer):
 
     def seeder_state_callback(self, ds):
         d = ds.get_download()
-        print >> sys.stderr, "test: seeder:", repr(d.get_def().get_name()), dlstatus_strings[ds.get_status()], ds.get_progress()
+        self._logger.debug("seeder: %s %s %s", repr(d.get_def().get_name()), dlstatus_strings[ds.get_status()], ds.get_progress())
         return 5.0, False
 
     def setUp(self):

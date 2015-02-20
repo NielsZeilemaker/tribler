@@ -16,7 +16,8 @@ from Tribler.Core.Session import Session
 from Tribler.Core.SessionConfig import SessionStartupConfig
 from Tribler.Core.osutils import get_picture_dir
 from Tribler.Core.simpledefs import UPLOAD, DOWNLOAD, STATEDIR_TORRENTCOLL_DIR
-from Tribler.Main.globals import DefaultDownloadStartupConfig, get_default_dscfg_filename
+from Tribler.Core.DownloadConfig import get_default_dscfg_filename
+from Tribler.Main.globals import DefaultDownloadStartupConfig
 from Tribler.Main.vwxGUI.GuiImageManager import GuiImageManager, data2wxBitmap, ICON_MAX_DIM
 from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
 from Tribler.Main.vwxGUI.validator import DirectoryValidator, NetworkSpeedValidator,NumberValidator
@@ -679,7 +680,7 @@ class SettingsDialog(wx.Dialog):
 
         sd_vsizer.AddStretchSpacer(1)
 
-        sd_faq_text = wx.StaticText(seeding_panel, label="Why differ between 'normal' BitTorrent and Tribler-peers?\nBecause between Tribler-peers you will build up a repuation.\nThis is not the case for 'normal' BitTorrent-peers.")
+        sd_faq_text = wx.StaticText(seeding_panel, label="Why differ between 'normal' BitTorrent and Tribler-peers?\nBecause between Tribler-peers you will build up a reputation.\nThis is not the case for 'normal' BitTorrent-peers.")
         sd_vsizer.Add(sd_faq_text)
 
         # other things

@@ -12,17 +12,16 @@
 # 3. Document your changes in API.py
 #
 #
-
-import sys
-import os.path
 import logging
+import os.path
+import sys
+from distutils.spawn import find_executable
 
-from Tribler.Core.defaults import sessdefaults
 from Tribler.Core.Base import Copyable, Serializable
 from Tribler.Core.RawServer.RawServer import autodetect_socket_style
-from Tribler.Core.Utilities.utilities import find_prog_in_PATH
 from Tribler.Core.Utilities.configparser import CallbackConfigParser
 from Tribler.Core.Utilities.network_utils import get_random_port
+from Tribler.Core.defaults import sessdefaults
 from Tribler.Core.osutils import is_android
 
 
@@ -61,10 +60,12 @@ class SessionConfigInterface(object):
             ffmpegname = u"ffmpeg.exe"
         elif sys.platform == 'darwin':
             ffmpegname = u"ffmpeg"
-        else:
+        elif find_executable("avconv"):
             ffmpegname = u"avconv"
+        else:
+            ffmpegname = u"ffmpeg"
 
-        ffmpegpath = find_prog_in_PATH(ffmpegname)
+        ffmpegpath = find_executable(ffmpegname)
         if ffmpegpath is None:
             if sys.platform == 'darwin':
                 self.sessconfig.set(u'general', u'videoanalyserpath', u"vlc/ffmpeg")
@@ -79,9 +80,9 @@ class SessionConfigInterface(object):
         if sys.platform == 'win32':
             videoplayerpath = os.path.expandvars('${PROGRAMFILES}') + '\\Windows Media Player\\wmplayer.exe'
         elif sys.platform == 'darwin':
-            videoplayerpath = find_prog_in_PATH("vlc") or ("/Applications/VLC.app" if os.path.exists("/Applications/VLC.app") else None) or "/Applications/QuickTime Player.app"
+            videoplayerpath = find_executable("vlc") or ("/Applications/VLC.app" if os.path.exists("/Applications/VLC.app") else None) or "/Applications/QuickTime Player.app"
         else:
-            videoplayerpath = find_prog_in_PATH("vlc") or "vlc"
+            videoplayerpath = find_executable("vlc") or "vlc"
 
         self.sessconfig.set(u'video', u'path', videoplayerpath)
 
@@ -192,6 +193,12 @@ class SessionConfigInterface(object):
     def get_ipv6(self):
         return self.sessconfig.get(u'general', u'ipv6_enabled')
 
+    def set_ip(self, ip):
+        self.sessconfig.set(u'general', u'ip', ip)
+
+    def get_ip(self):
+        return self.sessconfig.get(u'general', u'ip')
+
     #
     # Enable/disable Tribler features
     #
@@ -285,6 +292,31 @@ class SessionConfigInterface(object):
         """
         return self.sessconfig.get(u'libtorrent', u'utp')
 
+    #
+    # Torrent file store
+    #
+    def get_torrent_store(self):
+        """ Returns whether to enable the torrent store.
+        @return Boolean. """
+        return self.sessconfig.get(u'torrent_store', u'enabled')
+
+    def set_torrent_store(self, value):
+        """ Store torrent files in a leveldb database (default = True).
+        @param value Boolean.
+        """
+        self.sessconfig.set(u'torrent_store', u'enabled', value)
+
+    def get_torrent_store_dir(self):
+        """ Returns the torrent store directory.
+        @return str
+        """
+        return self.sessconfig.get(u'torrent_store', u'dir')
+
+    def set_torrent_store_dir(self, value):
+        """ Store torrent store dir(default = state_dir/collected_torrents).
+        @param value str.
+        """
+        self.sessconfig.set(u'torrent_store', u'dir', value)
 
     #
     # Torrent file collecting

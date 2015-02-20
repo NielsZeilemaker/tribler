@@ -3,6 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Ying-Chun Liu (PaulLiu) <paulliu@debian.org>
 Build-Depends: debhelper (>= 9),
+               dh-python,
                dpkg-dev (>= 1.16.1~),
                python (>= 2.7.0),
 Standards-Version: 3.9.5
@@ -10,26 +11,27 @@ Homepage: http://www.tribler.org/
 
 Package: tribler
 Architecture: all
-Depends: libav-tools,
+Depends: ${misc:Depends},
+         ${python:Depends},
+         ffmpeg | libav-tools,
          libjs-excanvas,
          libjs-mootools,
+         libsodium13,
          libx11-6,
          python-apsw,
          python-cherrypy3,
-         python-crypto,
+         python-cryptography,
          python-feedparser,
          python-gmpy,
+         python-leveldb,
          python-libtorrent (>= 0.16.4),
          python-m2crypto,
          python-netifaces,
          python-pil,
-         python-pyasn1 (>= 0.1.7),
          python-requests,
          python-twisted,
          python-wxgtk2.8,
          vlc (>= 1.1.0),
-         ${misc:Depends},
-         ${python:Depends}
 Description: Python based Bittorrent/Internet TV application
  It allows you to watch videos and download content. Tribler aims to combine
  the ease of Youtube.com with the performance of peer-to-peer.

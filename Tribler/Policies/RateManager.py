@@ -38,9 +38,8 @@ class RateManager(object):
         finally:
             self.lock.release()
 
-    def add_downloadstatelist(self, dslist):
-        for ds in dslist:
-            self.add_downloadstate(ds)
+    def add_downloadstatelist(self, download_state):
+        self.add_downloadstate(download_state)
 
     def adjust_speeds(self):
         """ Adjust speeds for the specified set of downloads and clears the set """
@@ -333,8 +332,6 @@ class UserDefinedMaxAlwaysOtherwiseDividedOverActiveSwarmsRateManager(UserDefine
         newws = []
         inactiveset = []
         for ds in workingset:
-            # d = ds.get_download()
-            # print >>sys.stderr,"RateManager: set_lim: Peers",d.get_def().get_name(),ds.get_num_nonseeds(),"alt",ds.get_num_seeds_peers()
             # Arno, 2010-09-16: Don't count any HTTP seeders as leechers.
             if ds.get_num_nonseeds() > 0:
                 newws.append(ds)

@@ -11,9 +11,9 @@ from SocketServer import ThreadingMixIn
 from threading import Event, Thread
 from traceback import print_exc
 from binascii import unhexlify
+from cherrypy.lib.httputil import get_ranges
 
 from Tribler.Core.simpledefs import DLMODE_VOD
-from Tribler.Core.Video.utils import get_ranges
 
 
 class VideoServer(ThreadingMixIn, HTTPServer):
@@ -84,11 +84,6 @@ class VideoRequestHandler(BaseHTTPRequestHandler):
         downloadhash = unhexlify(downloadhash)
         download = self.server.session.get_download(downloadhash)
 
-        if download and download.get_def().get_def_type() == 'swift':
-            self._logger.error("VideoServer: ignoring VOD request for swift")
-            self.send_error(404, "Not Found")
-            return
-
         if not download or not fileindex.isdigit() or int(fileindex) > len(download.get_def().get_files()):
             self.send_error(404, "Not Found")
             return
@@ -109,12 +104,12 @@ class VideoRequestHandler(BaseHTTPRequestHandler):
             self.videoplayer.set_vod_download(download)
 
             # Put download in sequential mode + trigger initial buffering.
-            if download.get_def().get_def_type() != "torrent" or download.get_def().is_multifile_torrent():
+            if download.get_def().is_multifile_torrent():
                 download.set_selected_files([filename])
             download.set_mode(DLMODE_VOD)
             download.restart()
 
-        piecelen = 2 ** 16 if download.get_def().get_def_type() == "swift" else download.get_def().get_piece_length()
+        piecelen = download.get_def().get_piece_length()
         blocksize = piecelen
 
         if requested_range is not None:

@@ -22,8 +22,8 @@ from Tribler.Core.exceptions import DuplicateDownloadException
 from Tribler.Core.osutils import get_readable_torrent_name
 from Tribler.Core.simpledefs import (NTFY_DISPERSY, NTFY_STARTED, NTFY_TORRENTS, NTFY_UPDATE, NTFY_INSERT,
                                      NTFY_ACTIVITIES, NTFY_REACHABLE, NTFY_ACT_UPNP)
+from Tribler.Core.torrentstore import TorrentStore
 from Tribler.Main.globals import DefaultDownloadStartupConfig
-from Tribler.community.tunnel.crypto.elgamalcrypto import ElgamalCrypto
 from Tribler.dispersy.util import blockingCallFromThread
 from Tribler.dispersy.endpoint import RawserverEndpoint
 
@@ -76,6 +76,7 @@ class TriblerLaunchMany(Thread):
         self.rawserver = None
         self.multihandler = None
 
+        self.torrent_store = None
         self.rtorrent_handler = None
         self.tftp_handler = None
 
@@ -87,7 +88,6 @@ class TriblerLaunchMany(Thread):
         self.mypref_db = None
         self.votecast_db = None
         self.channelcast_db = None
-        self.ue_db = None
         self.bundlerpref_db = None
 
         self.videoplayer = None
@@ -97,7 +97,7 @@ class TriblerLaunchMany(Thread):
         self.torrent_checking = None
         self.tunnel_community = None
 
-    def register(self, session, sesslock):
+    def register(self, session, sesslock, autoload_discovery=True):
         if not self.registered:
             self.registered = True
 
@@ -108,10 +108,13 @@ class TriblerLaunchMany(Thread):
                                        self.session.get_timeout_check_interval(),
                                        self.session.get_timeout(),
                                        ipv6_enable=self.session.get_ipv6(),
-                                       failfunc=self.rawserver_fatalerrorfunc,
-                                       errorfunc=self.rawserver_nonfatalerrorfunc)
+                                       fatal_func=self.rawserver_fatalerrorfunc,
+                                       nonfatal_func=self.rawserver_nonfatalerrorfunc)
 
             self.multihandler = MultiHandler(self.rawserver, self.sessdoneflag)
+
+            if self.session.get_torrent_store():
+                self.torrent_store = TorrentStore(self.session.get_torrent_store_dir())
 
             # torrent collecting: RemoteTorrentHandler
             if self.session.get_torrent_collecting():
@@ -122,8 +125,8 @@ class TriblerLaunchMany(Thread):
             if self.session.get_megacache():
                 from Tribler.Core.CacheDB.SqliteCacheDBHandler import (MiscDBHandler, PeerDBHandler, TorrentDBHandler,
                                                                        MyPreferenceDBHandler, VoteCastDBHandler,
-                                                                       ChannelCastDBHandler, UserEventLogDBHandler,
-                                                                       MetadataDBHandler, BundlerPreferenceDBHandler)
+                                                                       ChannelCastDBHandler, MetadataDBHandler,
+                                                                       BundlerPreferenceDBHandler)
                 from Tribler.Category.Category import Category
 
                 self._logger.debug('tlm: Reading Session state from %s', self.session.get_state_dir())
@@ -138,7 +141,6 @@ class TriblerLaunchMany(Thread):
                 self.mypref_db = MyPreferenceDBHandler(self.session)
                 self.votecast_db = VoteCastDBHandler(self.session)
                 self.channelcast_db = ChannelCastDBHandler(self.session)
-                self.ue_db = UserEventLogDBHandler(self.session)
                 self.bundlerpref_db = BundlerPreferenceDBHandler(self.session)
 
                 # initializes DBHandlers
@@ -149,7 +151,6 @@ class TriblerLaunchMany(Thread):
                 self.mypref_db.initialize()
                 self.votecast_db.initialize()
                 self.channelcast_db.initialize()
-                self.ue_db.initialize()
                 self.bundlerpref_db.initialize()
 
             if self.session.get_videoplayer():
@@ -162,11 +163,10 @@ class TriblerLaunchMany(Thread):
                 from Tribler.dispersy.dispersy import Dispersy
 
                 # set communication endpoint
-                endpoint = RawserverEndpoint(self.rawserver, self.session.get_dispersy_port())
+                endpoint = RawserverEndpoint(self.rawserver, self.session.get_dispersy_port(), ip=self.session.get_ip())
 
                 working_directory = unicode(self.session.get_state_dir())
-                crypto = ElgamalCrypto(self.session.get_install_dir())
-                self.dispersy = Dispersy(endpoint, working_directory, crypto=crypto)
+                self.dispersy = Dispersy(endpoint, working_directory)
 
                 # register TFTP service
                 from Tribler.Core.TFTP.handler import TftpHandler
@@ -175,16 +175,16 @@ class TriblerLaunchMany(Thread):
                 self.tftp_handler.initialize()
 
         if not self.initComplete:
-            self.init()
+            self.init(autoload_discovery)
 
-    def init(self):
+    def init(self, autoload_discovery):
         if self.dispersy:
             from Tribler.dispersy.community import HardKilledCommunity
 
             self._logger.info("lmc: Starting Dispersy...")
 
             now = timemod.time()
-            success = self.dispersy.start()
+            success = self.dispersy.start(autoload_discovery)
 
             diff = timemod.time() - now
             if success:
@@ -195,10 +195,9 @@ class TriblerLaunchMany(Thread):
 
             self.upnp_ports.append((self.dispersy.wan_address[1], 'UDP'))
 
-            from Tribler.Core.permid import read_keypair
-            keypair = read_keypair(self.session.get_permid_keypair_filename())
+            from Tribler.dispersy.crypto import M2CryptoSK
             self.session.dispersy_member = blockingCallFromThread(reactor, self.dispersy.get_member,
-                                                                  private_key=self.dispersy.crypto.key_to_bin(keypair))
+                                                                  private_key=self.dispersy.crypto.key_to_bin(M2CryptoSK(filename=self.session.get_permid_keypair_filename())))
 
             blockingCallFromThread(reactor, self.dispersy.define_auto_load, HardKilledCommunity,
                                    self.session.dispersy_member, load=True)
@@ -278,13 +277,13 @@ class TriblerLaunchMany(Thread):
                 self.mypref_db.addMyPreference(torrent_id, data)
 
             if isinstance(tdef, TorrentDefNoMetainfo):
-                self.torrent_db.addInfohash(tdef.get_infohash())
+                self.torrent_db.addOrGetTorrentID(tdef.get_infohash())
                 self.torrent_db.updateTorrent(tdef.get_infohash(), name=tdef.get_name_as_unicode())
                 write_my_pref()
             elif self.rtorrent_handler:
                 self.rtorrent_handler.save_torrent(tdef, write_my_pref)
             else:
-                self.torrent_db.addExternalTorrent(tdef, source='', extra_info={'status': 'good'})
+                self.torrent_db.addExternalTorrent(tdef, extra_info={'status': 'good'})
                 write_my_pref()
 
         return d
@@ -340,15 +339,15 @@ class TriblerLaunchMany(Thread):
         finally:
             self.sesslock.release()
 
-    def update_trackers(self, id, trackers):
+    def update_trackers(self, infohash, trackers):
         """ Update the trackers for a download.
-        @param id ID of the download for which the trackers need to be updated
-        @param trackers A list of tracker urls.
+        :param infohash: infohash of the torrent that needs to be updated
+        :param trackers: A list of tracker urls.
         """
-        dl = self.get_download(id)
+        dl = self.get_download(infohash)
         old_def = dl.get_def() if dl else None
 
-        if old_def and old_def.get_def_type() == 'torrent':
+        if old_def:
             old_trackers = old_def.get_trackers_as_single_tuple()
             new_trackers = list(set(trackers) - set(old_trackers))
             all_trackers = list(old_trackers) + new_trackers
@@ -374,14 +373,16 @@ class TriblerLaunchMany(Thread):
 
                 if isinstance(old_def, TorrentDefNoMetainfo):
                     @forceDBThread
-                    def update_trackers_db(id, new_trackers):
-                        torrent_id = self.torrent_db.getTorrentID(id)
+                    def update_trackers_db(infohash, new_trackers):
+                        torrent_id = self.torrent_db.getTorrentID(infohash)
                         if torrent_id is not None:
                             self.torrent_db.addTorrentTrackerMappingInBatch(torrent_id, new_trackers)
-                            self.session.uch.notify(NTFY_TORRENTS, NTFY_UPDATE, id)
+                            self.session.uch.notify(NTFY_TORRENTS, NTFY_UPDATE, infohash)
+
+
 
                     if self.session.get_megacache():
-                        update_trackers_db(id, new_trackers)
+                        update_trackers_db(infohash, new_trackers)
 
                 elif not isinstance(old_def, TorrentDefNoMetainfo) and self.rtorrent_handler:
                     # Update collected torrents
@@ -433,7 +434,7 @@ class TriblerLaunchMany(Thread):
             # for every initiated dl.
             # 2012-07-31: Turn MOREINFO on/off on demand for efficiency.
             # 2013-04-17: Libtorrent now uses set_moreinfo_stats as well.
-            d.set_moreinfo_stats(True in getpeerlist or d.get_def().get_id() in getpeerlist)
+            d.set_moreinfo_stats(True in getpeerlist or d.get_def().get_infohash() in getpeerlist)
 
         network_set_download_states_callback_lambda = lambda: self.network_set_download_states_callback(usercallback)
         self.rawserver.add_task(network_set_download_states_callback_lambda, when)
@@ -567,8 +568,8 @@ class TriblerLaunchMany(Thread):
         if tdef and dscfg:
             if dscfg.get_dest_dir() != '':  # removed torrent ignoring
                 try:
-                    if not self.download_exists(tdef.get_id()):
-                        initialdlstatus = initialdlstatus_dict.get(tdef.get_id(), initialdlstatus)
+                    if not self.download_exists(tdef.get_infohash()):
+                        initialdlstatus = initialdlstatus_dict.get(tdef.get_infohash(), initialdlstatus)
                         self.add(tdef, dscfg, pstate, initialdlstatus, setupDelay=setupDelay)
                     else:
                         self._logger.info("tlm: not resuming checkpoint because download has already been added")
@@ -656,6 +657,10 @@ class TriblerLaunchMany(Thread):
             self.tftp_handler.shutdown()
             self.tftp_handler = None
 
+        if self.torrent_store is not None:
+            self.torrent_store.close()
+            self.torrent_store = None
+
         if self.dispersy:
             self._logger.info("lmc: Shutting down Dispersy...")
             now = timemod.time()
@@ -673,7 +678,6 @@ class TriblerLaunchMany(Thread):
 
         if self.session.get_megacache():
             self.bundlerpref_db.close()
-            self.ue_db.close()
             self.channelcast_db.close()
             self.votecast_db.close()
             self.mypref_db.close()
@@ -683,7 +687,6 @@ class TriblerLaunchMany(Thread):
             self.misc_db.close()
 
             self.bundlerpref_db = None
-            self.ue_db = None
             self.channelcast_db = None
             self.votecast_db = None
             self.mypref_db = None
@@ -767,7 +770,6 @@ class TriblerLaunchMany(Thread):
 
     def set_activity(self, type, str='', arg2=None):
         """ Called by overlay + network thread """
-        # print >>sys.stderr,"tlm: set_activity",type,str,arg2
         self.session.uch.notify(NTFY_ACTIVITIES, NTFY_INSERT, type, str, arg2)
 
     def update_torrent_checking_period(self):
@@ -776,7 +778,6 @@ class TriblerLaunchMany(Thread):
             ntorrents = self.rtorrent_handler.num_torrents
             if ntorrents > 0:
                 self.torrent_checking_period = min(max(7200 / ntorrents, 10), 100)
-        # print >> sys.stderr, "torrent_checking_period", self.torrent_checking_period
 
     def run_torrent_check(self):
         """ Called by network thread """
@@ -819,31 +820,3 @@ class TriblerLaunchMany(Thread):
         else:
             return False
         return True
-
-
-def singledownload_size_cmp(x, y):
-    """ Method that compares 2 SingleDownload objects based on the size of the
-        content of the BT1Download (if any) contained in them.
-    """
-    if x is None and y is None:
-        return 0
-    elif x is None:
-        return 1
-    elif y is None:
-        return -1
-    else:
-        a = x.get_bt1download()
-        b = y.get_bt1download()
-        if a is None and b is None:
-            return 0
-        elif a is None:
-            return 1
-        elif b is None:
-            return -1
-        else:
-            if a.get_datalength() == b.get_datalength():
-                return 0
-            elif a.get_datalength() < b.get_datalength():
-                return -1
-            else:
-                return 1

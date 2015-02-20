@@ -6,21 +6,21 @@ import copy
 import logging
 import os
 import socket
+from binascii import hexlify
 
 from Tribler.Core import NoDispersyRLock
-
-from Tribler.Core.CacheDB.sqlitecachedb import SQLiteCacheDB
-from Tribler.Core.Upgrade.upgrade import TriblerUpgrader
-
 from Tribler.Core.APIImplementation.LaunchManyCore import TriblerLaunchMany
 from Tribler.Core.APIImplementation.UserCallbackHandler import UserCallbackHandler
+from Tribler.Core.CacheDB.sqlitecachedb import SQLiteCacheDB
 from Tribler.Core.SessionConfig import SessionConfigInterface, SessionStartupConfig
+from Tribler.Core.Upgrade.upgrade import TriblerUpgrader
 from Tribler.Core.exceptions import NotYetImplementedException, OperationNotEnabledByConfigurationException
-from Tribler.Core.osutils import get_appstate_dir, is_android
-from Tribler.Core.simpledefs import (STATEDIR_TORRENTCOLL_DIR, STATEDIR_PEERICON_DIR, STATEDIR_DLPSTATE_DIR,
-                                     STATEDIR_SESSCONFIG, NTFY_MISC, NTFY_PEERS, NTFY_BUNDLERPREFERENCE,
-                                     NTFY_TORRENTS, NTFY_MYPREFERENCES, NTFY_VOTECAST, NTFY_CHANNELCAST, NTFY_UPDATE,
-                                     NTFY_USEREVENTLOG, NTFY_INSERT, NTFY_DELETE, NTFY_METADATA)
+from Tribler.Core.osutils import get_appstate_dir
+from Tribler.Core.simpledefs import (STATEDIR_PEERICON_DIR, STATEDIR_DLPSTATE_DIR, STATEDIR_SESSCONFIG,
+                                     NTFY_MISC, NTFY_PEERS, NTFY_BUNDLERPREFERENCE, NTFY_TORRENTS,
+                                     NTFY_MYPREFERENCES, NTFY_VOTECAST, NTFY_CHANNELCAST, NTFY_UPDATE,
+                                     NTFY_INSERT, NTFY_DELETE, NTFY_METADATA, STATEDIR_TORRENT_STORE_DIR)
+
 
 GOTM2CRYPTO = False
 try:
@@ -43,7 +43,7 @@ class Session(SessionConfigInterface):
     """
     __single = None
 
-    def __init__(self, scfg=None, ignore_singleton=False):
+    def __init__(self, scfg=None, ignore_singleton=False, autoload_discovery=True):
         """
         A Session object is created which is configured following a copy of the
         SessionStartupConfig scfg. (copy constructor used internally)
@@ -92,8 +92,19 @@ class Session(SessionConfigInterface):
             create_dir(dirname or default_dir)
 
         set_and_create_dir(scfg.get_state_dir(), scfg.set_state_dir, Session.get_default_state_dir())
-        set_and_create_dir(scfg.get_torrent_collecting_dir(), scfg.set_torrent_collecting_dir, os.path.join(scfg.get_state_dir(), STATEDIR_TORRENTCOLL_DIR))
-        set_and_create_dir(scfg.get_peer_icon_path(), scfg.set_peer_icon_path, os.path.join(scfg.get_state_dir(), STATEDIR_PEERICON_DIR))
+        # Note that we are setting it to STATEDIR_TORRENT_STORE_DIR instead of
+        # STATEDIR_TORRENTCOLL_DIR as that dir is unused and only kept for
+        # the upgrade process.
+        set_and_create_dir(scfg.get_torrent_collecting_dir(),
+                           scfg.set_torrent_collecting_dir,
+                           os.path.join(scfg.get_state_dir(), STATEDIR_TORRENT_STORE_DIR))
+
+        set_and_create_dir(scfg.get_torrent_store_dir(),
+                           scfg.set_torrent_store_dir,
+                           os.path.join(scfg.get_state_dir(), STATEDIR_TORRENT_STORE_DIR))
+
+        set_and_create_dir(scfg.get_peer_icon_path(), scfg.set_peer_icon_path,
+                           os.path.join(scfg.get_state_dir(), STATEDIR_PEERICON_DIR))
 
         create_dir(os.path.join(scfg.get_state_dir(), u"sqlite"))
 
@@ -152,6 +163,8 @@ class Session(SessionConfigInterface):
 
         self.sqlite_db = None
 
+        self.autoload_discovery = autoload_discovery
+
     def prestart(self):
         """ Pre-starts the session. We check the currently version and upgrades if needed
         before we start everything else.
@@ -187,6 +200,7 @@ class Session(SessionConfigInterface):
         Session.__single = None
     del_instance = staticmethod(del_instance)
 
+    @staticmethod
     def get_default_state_dir(homedirpostfix='.Tribler'):
         """ Returns the factory default directory for storing session state
         on the current platform (Win32,Mac,Unix).
@@ -204,8 +218,6 @@ class Session(SessionConfigInterface):
         appdir = get_appstate_dir()
         statedir = os.path.join(appdir, homedirpostfix)
         return statedir
-
-    get_default_state_dir = staticmethod(get_default_state_dir)
 
     #
     # Public methods
@@ -230,7 +242,6 @@ class Session(SessionConfigInterface):
         @return Download
         """
         # locking by lm
-        assert tdef.get_def_type() == "torrent"
         if self.get_libtorrent():
             return self.lm.add(tdef, dcfg, initialdlstatus=initialdlstatus, hidden=hidden)
         raise OperationNotEnabledByConfigurationException()
@@ -262,6 +273,14 @@ class Session(SessionConfigInterface):
         # locking by lm
         return self.lm.get_download(infohash)
 
+    def has_download(self, infohash):
+        """
+        Checks if the torrent download already exists.
+        :param infohash: The torrent infohash.
+        :return: True or False indicating if the torrent download already exists.
+        """
+        return self.lm.download_exists(infohash)
+
     def remove_download(self, d, removecontent=False, removestate=True, hidden=False):
         """
         Stops the download and removes it from the session.
@@ -274,8 +293,7 @@ class Session(SessionConfigInterface):
         removed
         """
         # locking by lm
-        if d.get_def().get_def_type() == "torrent":
-            self.lm.remove(d, removecontent=removecontent, removestate=removestate, hidden=hidden)
+        self.lm.remove(d, removecontent=removecontent, removestate=removestate, hidden=hidden)
 
     def remove_download_by_id(self, infohash, removecontent=False, removestate=True):
         """
@@ -288,7 +306,7 @@ class Session(SessionConfigInterface):
         """
         downloadList = self.get_downloads()
         for download in downloadList:
-            if download.get_def().get_id() == infohash:
+            if download.get_def().get_infohash() == infohash:
                 self.remove_download(download, removecontent, removestate)
                 return
 
@@ -428,8 +446,6 @@ class Session(SessionConfigInterface):
             return self.lm.votecast_db
         elif subject == NTFY_CHANNELCAST:
             return self.lm.channelcast_db
-        elif subject == NTFY_USEREVENTLOG:
-            return self.lm.ue_db
         elif subject == NTFY_BUNDLERPREFERENCE:
             return self.lm.bundlerpref_db
         else:
@@ -465,7 +481,7 @@ class Session(SessionConfigInterface):
 
         # Create engine with network thread
         self.lm = TriblerLaunchMany()
-        self.lm.register(self, self.sesslock)
+        self.lm.register(self, self.sesslock, autoload_discovery=self.autoload_discovery)
         self.lm.start()
 
         self.sessconfig.set_callback(self.lm.sessconfig_changed_callback)
@@ -611,9 +627,34 @@ class Session(SessionConfigInterface):
         return os.path.join(state_dir, STATEDIR_SESSCONFIG)
     get_default_config_filename = staticmethod(get_default_config_filename)
 
-    def update_trackers(self, id, trackers):
-        """ Update the trackers for a download.
-        @param id ID of the download for which the trackers need to be updated
-        @param trackers A list of tracker urls.
+    def update_trackers(self, infohash, trackers):
+        """ Updates the trackers of a torrent.
+        :param infohash: infohash of the torrent that needs to be updated
+        :param trackers: A list of tracker urls.
         """
-        return self.lm.update_trackers(id, trackers)
+        return self.lm.update_trackers(infohash, trackers)
+
+    # New APIs
+    def has_collected_torrent(self, infohash):
+        """
+        Checks if the given torrent infohash exists in the torrent_store database.
+        :param infohash: The given infohash binary.
+        :return: True or False indicating if we have the torrent.
+        """
+        return hexlify(infohash) in self.lm.torrent_store
+
+    def get_collected_torrent(self, infohash):
+        """
+        Gets the given torrent from the torrent_store database.
+        :param infohash: The given infohash binary.
+        :return: The torrent data if exists, None otherwise.
+        """
+        return self.lm.torrent_store.get(hexlify(infohash))
+
+    def save_collected_torrent(self, infohash, data):
+        """
+        Saves the given torrent into the torrent_store database.
+        :param infohash: The given infohash binary.
+        :param data: The torrent file data.
+        """
+        self.lm.torrent_store.put(hexlify(infohash), data)

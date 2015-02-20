@@ -1,6 +1,5 @@
 # Written by Jelle Roozenburg, Maarten ten Brinke, Lucan Musat, Arno Bakker
 # see LICENSE.txt for license information
-import json
 import logging
 import os
 import threading
@@ -17,11 +16,11 @@ from Tribler.Core.Search.Bundler import Bundler
 from Tribler.Core.Search.Reranking import DefaultTorrentReranker
 from Tribler.Core.Search.SearchManager import split_into_keywords
 from Tribler.Core.TorrentDef import TorrentDef, TorrentDefNoMetainfo
-from Tribler.Core.Utilities.utilities import parse_magnetlink
 from Tribler.Core.Video.VideoPlayer import VideoPlayer
 from Tribler.Core.Video.utils import videoextdefaults
 from Tribler.Core.simpledefs import (NTFY_MISC, NTFY_TORRENTS, NTFY_MYPREFERENCES, NTFY_VOTECAST, NTFY_CHANNELCAST,
-                                     NTFY_METADATA, DLSTATUS_METADATA, DLSTATUS_WAITING4HASHCHECK)
+                                     NTFY_METADATA, DLSTATUS_METADATA, DLSTATUS_WAITING4HASHCHECK,
+                                     SIGNAL_ALLCHANNEL, SIGNAL_SEARCH_COMMUNITY, SIGNAL_ONSEARCHRESULTS)
 from Tribler.Main.Utility.GuiDBHandler import startWorker, GUI_PRI_DISPERSY
 from Tribler.Main.Utility.GuiDBTuples import (Torrent, ChannelTorrent, CollectedTorrent, RemoteTorrent,
                                               NotCollectedTorrent, LibraryTorrent, Comment, Modification, Channel,
@@ -34,18 +33,13 @@ from Tribler.Main.vwxGUI import (warnWxThread, forceWxThread, TORRENT_REQ_COLUMN
                                  TUMBNAILTORRENT_REQ_COLUMNS)
 from Tribler.Main.vwxGUI.UserDownloadChoice import UserDownloadChoice
 from Tribler.TrackerChecking.TorrentChecking import TorrentChecking
+
 from Tribler.community.allchannel.community import AllChannelCommunity
 from Tribler.community.channel.community import (ChannelCommunity, warnDispersyThread)
 from Tribler.community.metadata.community import MetadataCommunity
 from Tribler.community.search.community import SearchCommunity
 from Tribler.dispersy.exception import CommunityNotFoundException
 from Tribler.dispersy.util import call_on_reactor_thread
-
-
-SEARCHMODE_STOPPED = 1
-SEARCHMODE_SEARCHING = 2
-SEARCHMODE_NONE = 3
-VOTE_LIMIT = -5
 
 
 class TorrentManager(object):
@@ -72,10 +66,6 @@ class TorrentManager(object):
         self.gotRemoteHits = False
         self.remoteLock = threading.Lock()
 
-        # Requests for torrents
-        self.requestedTorrents = set()
-        self.requestedTorrentsMessages = set()
-
         # For asking for a refresh when remote results came in
         self.gridmgr = None
         self.searchkeywords = []
@@ -101,51 +91,6 @@ class TorrentManager(object):
         TorrentManager.__single = None
     delInstance = staticmethod(delInstance)
 
-    def getCollectedFilename(self, torrent, retried=False):
-        """
-        TORRENT is a dictionary containing torrent information used to
-        display the entry on the UI. it is NOT the torrent file!
-
-        Returns a filename, if filename is known
-        """
-        torrent_filename = torrent.torrent_file_name
-        if torrent_filename and os.path.isfile(torrent_filename):
-            return torrent_filename
-
-        if not retried:
-            # reload torrent to see if database contains any changes
-            dict = self.torrent_db.getTorrent(torrent.infohash, keys=['torrent_id', 'torrent_file_name'],
-                                              include_mypref=False)
-            if dict:
-                torrent.update_torrent_id(dict['torrent_id'])
-                torrent.torrent_file_name = dict['torrent_file_name']
-                return self.getCollectedFilename(torrent, retried=True)
-
-    def getCollectedFilenameFromDef(self, torrentdef):
-        torrent = self.getTorrentByInfohash(torrentdef.infohash)
-        if torrent:
-            return self.getCollectedFilename(torrent)
-
-    def getTorrent(self, torrent, callback, prio=0):
-        """
-        TORRENT is a dictionary containing torrent information used to
-        display the entry on the UI. it is NOT the torrent file!
-
-        CALLBACK is called when the torrent is downloaded. When no
-        torrent can be downloaded the callback is ignored
-        As a first argument the filename of the torrent is passed
-
-        Returns a boolean + request_type
-        describing if the torrent is requested
-        """
-
-        if self.downloadTorrentfileFromPeers(torrent, callback, duplicate=True, prio=prio):
-            candidates = torrent.query_candidates
-            if candidates and len(candidates) > 0:
-                return True, "from peers"
-            return True, "from the dht"
-        return False
-
     def downloadTorrentfileFromPeers(self, torrent, callback, duplicate=True, prio=0):
         """
         TORRENT is a GuiDBTuple containing torrent information used to
@@ -168,16 +113,13 @@ class TorrentManager(object):
         """
 
         # return False when duplicate
-        if not duplicate and torrent.infohash in self.requestedTorrents:
+        if not duplicate and self.session.has_download(torrent.infohash):
             return False
 
         if torrent.query_candidates is None or len(torrent.query_candidates) == 0:
             self.session.download_torrentfile(torrent.infohash, callback, prio)
 
         else:
-            # only add to requestedTorrents if we have peers
-            self.requestedTorrents.add(torrent.infohash)
-
             for candidate in torrent.query_candidates:
                 self.session.download_torrentfile_from_peer(candidate, torrent.infohash, callback, prio)
 
@@ -202,50 +144,39 @@ class TorrentManager(object):
 
         Returns True or False
         """
-        # return False when duplicate
-        if not duplicate and torrent.infohash in self.requestedTorrentsMessages:
-            return False
-
         if torrent.query_candidates is None or len(torrent.query_candidates) == 0:
             return False
 
         else:
-            # only add to requestedTorrents if we have peers
-            self.requestedTorrentsMessages.add(torrent.infohash)
-
             for candidate in torrent.query_candidates:
                 self.session.download_torrentmessage_from_peer(candidate, torrent.infohash, callback, prio)
         return True
 
-    def downloadTorrent(self, torrent, dest=None, secret=False, vodmode=False, selectedFiles=None):
-        torrent_filename = self.getCollectedFilename(torrent)
+    def downloadTorrent(self, torrent):
+        torrent_filename = torrent.torrent_file_name
 
         name = torrent.get('name', torrent.infohash)
-        clicklog = {'keywords': self.searchkeywords,
-                    'reranking_strategy': self.rerankingStrategy.getID()}
 
-        if "click_position" in torrent:
-            clicklog["click_position"] = torrent["click_position"]
-
-        tdef = TorrentDefNoMetainfo(torrent.infohash, torrent.name) \
-            if not isinstance(torrent_filename, basestring) else None
+        torrent_data = self.session.get_collected_torrent(torrent.infohash)
+        if torrent_data is not None:
+            tdef = TorrentDef.load_from_memory(torrent_data)
+        else:
+            tdef = TorrentDefNoMetainfo(torrent.infohash, torrent.name) \
+                if not isinstance(torrent_filename, basestring) else None
 
         # Api download
         def do_gui():
-            d = self.guiUtility.frame.startDownload(torrent_filename, tdef=tdef, destdir=dest, clicklog=clicklog, name=name, vodmode=vodmode, selectedFiles=selectedFiles)  # # remove name=name
-            if d:
-                if secret:
-                    self.torrent_db.setSecret(torrent.infohash, secret)
-
-                self._logger.debug('standardDetails: download: download started')
+            self.guiUtility.frame.startDownload(torrent_filename, tdef=tdef)
         wx.CallAfter(do_gui)
-
-        return bool(tdef)
 
     def loadTorrent(self, torrent, callback=None):
         if not isinstance(torrent, CollectedTorrent):
-            torrent_filename = self.getCollectedFilename(torrent)
-            if not torrent_filename:
+            if torrent.torrent_id <= 0:
+                torrent_id = self.torrent_db.getTorrentID(torrent.infohash)
+                if torrent_id:
+                    torrent.update_torrent_id(torrent_id)
+
+            if not self.session.has_collected_torrent(torrent.infohash):
                 files = []
                 trackers = []
 
@@ -255,15 +186,6 @@ class TorrentManager(object):
                 else:
                     torrent_id = torrent.torrent_id
 
-                if torrent_id and torrent_id != -1:
-                    files = self.torrent_db.getTorrentFiles(torrent_id)
-
-                    collectingSources = self.torrent_db.getTorrentCollecting(torrent_id)
-                    for source, in collectingSources:
-                        if source.startswith('magnet'):
-                            _, _, trs = parse_magnetlink(source)
-                            trackers.extend(trs)
-
                 trackers.extend(self.torrent_db.getTrackerListByTorrentID(torrent_id))
 
                 if 'DHT' in trackers:
@@ -271,30 +193,14 @@ class TorrentManager(object):
                 if 'no-DHT' in trackers:
                     trackers.remove('no-DHT')
 
-                if len(files) > 0:
-                    # We still call getTorrent to fetch .torrent
-                    self.getTorrent(torrent, None)
 
-                    torrent = NotCollectedTorrent(torrent, files, trackers)
-                else:
-                    torrent_callback = lambda torfilename: self.loadTorrent(torrent, callback)
-                    torrent_filename = self.getTorrent(torrent, torrent_callback)
+                # We still call getTorrent to fetch .torrent
+                self.downloadTorrentfileFromPeers(torrent, None)
 
-                    if torrent_filename[0]:
-                        return torrent_filename[1]
+                torrent = NotCollectedTorrent(torrent, files, trackers)
+
             else:
-                try:
-                    tdef = TorrentDef.load(torrent_filename)
-
-                except ValueError:
-                    # we should move fixTorrent to this object
-                    if self.guiUtility.frame.fixTorrent(torrent_filename):
-                        tdef = TorrentDef.load(torrent_filename)
-
-                    else:
-                        # cannot repair torrent, removing
-                        os.remove(torrent_filename)
-                        return self.loadTorrent(torrent, callback)
+                tdef = TorrentDef.load_from_memory(self.session.get_collected_torrent(torrent.infohash))
 
                 if torrent.torrent_id <= 0:
                     del torrent.torrent_id
@@ -302,7 +208,7 @@ class TorrentManager(object):
                 torrent = CollectedTorrent(torrent, tdef)
 
         self.library_manager.addDownloadState(torrent)
-        if not callback is None:
+        if callback is not None:
             callback(torrent)
         else:
             return torrent
@@ -345,6 +251,8 @@ class TorrentManager(object):
 
             self.dispersy = session.lm.dispersy
             self.xxx_category = self.misc_db.categoryName2Id([u'xxx'])
+
+            self.session.add_observer(self.gotDispersyRemoteHits, SIGNAL_SEARCH_COMMUNITY, [SIGNAL_ONSEARCHRESULTS])
         else:
             raise RuntimeError('TorrentManager already connected')
 
@@ -357,7 +265,7 @@ class TorrentManager(object):
         if self.dispersy:
             for community in self.dispersy.get_communities():
                 if isinstance(community, SearchCommunity):
-                    nr_requests_made = community.create_search(self.searchkeywords, self.gotDispersyRemoteHits)
+                    nr_requests_made = community.create_search(self.searchkeywords)
                     if not nr_requests_made:
                         self._logger.info("Could not send search in SearchCommunity, no verified candidates found")
                     break
@@ -461,8 +369,7 @@ class TorrentManager(object):
         prefetch_counter_limit = [5, 10]
 
         for i, hit in enumerate(self.hits):
-            torrent_filename = self.getCollectedFilename(hit, retried=True)
-            if not torrent_filename:
+            if not self.guiUtility.utility.session.has_collected_torrent(hit.infohash):
                 # this .torrent is not collected, decide if we want to collect it, or only collect torrentmessage
                 if prefetch_counter[0] < prefetch_counter_limit[0] and i < hit_counter_limit[0]:
                     if self.downloadTorrentfileFromPeers(hit, lambda _, infohash=hit.infohash: sesscb_prefetch_done(infohash), duplicate=False, prio=1):
@@ -625,9 +532,12 @@ class TorrentManager(object):
 
         return False, []
 
-    def gotDispersyRemoteHits(self, keywords, results, candidate):
+    def gotDispersyRemoteHits(self, subject, changetype, objectID, search_results):
         refreshGrid = False
         try:
+            keywords = search_results['keywords']
+            results = search_results['results']
+            candidate = search_results['candidate']
             self._logger.debug("TorrentSearchGridManager: gotRemoteHist: got %s unfiltered results for %s %s %s", len(results), keywords, candidate, time())
 
             if self.searchkeywords == keywords:
@@ -914,14 +824,14 @@ class LibraryManager(object):
 
     def updateProgressInDB(self):
         for ds in self.dslist[:]:
-            id = ds.get_download().get_def().get_id()
+            infohash = ds.get_download().get_def().get_infohash()
             progress = (ds.get_progress() or 0.0) * 100.0
 
             # update progress if difference is larger than 5%
-            if progress - self.cache_progress.get(id, 0) > 5:
-                self.cache_progress[id] = progress
+            if progress - self.cache_progress.get(infohash, 0) > 5:
+                self.cache_progress[infohash] = progress
                 try:
-                    self.mypref_db.updateProgressByHash(id, progress)
+                    self.mypref_db.updateProgressByHash(infohash, progress)
                 except:
                     print_exc()
 
@@ -965,7 +875,7 @@ class LibraryManager(object):
 
     def stopLastVODTorrent(self):
         if self.last_vod_torrent:
-            self.stopTorrent(self.last_vod_torrent[0])
+            self.stopTorrent(self.last_vod_torrent[0].infohash)
 
     @forceWxThread
     def playTorrent(self, infohash, selectedinfilename=None):
@@ -1003,11 +913,11 @@ class LibraryManager(object):
                 self._playDownload(infohash, selectedinfilename)
         else:
             def do_db():
-                torrent = self.guiUtility.torrentsearch_manager.getTorrentByInfohash(infohash)
-                filename = self.guiUtility.torrentsearch_manager.getCollectedFilename(torrent)
-                if filename:
-                    tdef = TorrentDef.load(filename)
+                torrent_data = self.guiUtility.utility.session.get_collected_torrent(infohash)
+                if torrent_data is not None:
+                    tdef = TorrentDef.load_from_memory(torrent_data)
                 else:
+                    torrent = self.guiUtility.torrentsearch_manager.getTorrentByInfohash(infohash)
                     tdef = TorrentDefNoMetainfo(infohash, torrent.name)
                 return tdef
 
@@ -1069,20 +979,20 @@ class LibraryManager(object):
             self.guiUtility.frame.startDownloadFromMagnet(url, destdir)
 
     def resumeTorrent(self, torrent, force_seed=False):
-        downloads = self._getDownloads(torrent)
+        download = self.session.get_download(torrent.infohash)
         resumed = False
-        for download in downloads:
-            if download:
-                download.restart()
-                resumed = True
 
-                id = download.get_def().get_id()
-                self.user_download_choice.set_download_state(id, "restartseed" if force_seed and download.get_progress() == 1.0 else "restart")
+        if download:
+            download.restart()
+            resumed = True
+
+            infohash = download.get_def().get_infohash()
+            self.user_download_choice.set_download_state(infohash, "restartseed" if force_seed and download.get_progress() == 1.0 else "restart")
 
         if not resumed:
-            filename = self.torrentsearch_manager.getCollectedFilename(torrent)
-            if filename:
-                tdef = TorrentDef.load(filename)
+            torrent_data = self.guiUtility.utility.session.get_collected_torrent(torrent.infohash)
+            if torrent_data is not None:
+                tdef = TorrentDef.load_from_memory(torrent_data)
 
                 destdirs = self.mypref_db.getMyPrefStats(torrent.torrent_id)
                 destdir = destdirs.get(torrent.torrent_id, None)
@@ -1091,37 +1001,25 @@ class LibraryManager(object):
                 self.guiUtility.frame.startDownload(tdef=tdef, destdir=destdir)
             else:
                 callback = lambda torrentfilename: self.resumeTorrent(torrent)
-                self.torrentsearch_manager.getTorrent(torrent, callback)
+                self.torrentsearch_manager.downloadTorrentfileFromPeers(torrent, callback)
 
-    def stopTorrent(self, torrent):
-        downloads = self._getDownloads(torrent) if not isinstance(torrent, basestring) else [self.session.get_download(torrent)]
-        for download in downloads:
-            if download:
-                self.stopVideoIfEqual(download)
-                download.stop()
+    def stopTorrent(self, infohash):
+        assert isinstance(infohash, str), "infohash is of type %s" % type(infohash)
+        assert len(infohash) == 20, "infohash length is not 20: %s, %s" % (len(infohash), infohash)
 
-                id = download.get_def().get_id()
-                self.user_download_choice.set_download_state(id, "stop")
+        download = self.session.get_download(infohash)
+        if download:
+            self.stopVideoIfEqual(download)
+            download.stop()
 
-    def _getDownloads(self, torrent):
-        downloads = []
-        for curdownload in self.session.get_downloads():
-            infohash = curdownload.get_def().get_id()
-            if infohash == torrent.infohash:
-                downloads.append(curdownload)
-        return downloads
+            infohash = download.get_def().get_infohash()
+            self.user_download_choice.set_download_state(infohash, "stop")
 
     def deleteTorrent(self, torrent, removecontent=False):
-        if torrent.dslist:
-            dslist = torrent.dslist
-        else:
-            dslist = [None, None]
-
-        for i, ds in enumerate(dslist):
-            self.deleteTorrentDS(ds, torrent.infohash, removecontent)
+        self.deleteTorrentDS(torrent.download_state, torrent.infohash, removecontent)
 
     def deleteTorrentDS(self, ds, infohash, removecontent=False):
-        if not ds is None:
+        if ds is not None:
             self.stopVideoIfEqual(ds.download, reset_playlist=True)
             self.deleteTorrentDownload(ds.get_download(), infohash, removecontent)
 
@@ -1298,6 +1196,8 @@ class ChannelManager(object):
             self.remote_th = RemoteTorrentHandler.getInstance()
 
             self.dispersy = session.lm.dispersy
+
+            self.session.add_observer(self.gotDispersyRemoteHits, SIGNAL_ALLCHANNEL, [SIGNAL_ONSEARCHRESULTS])
         else:
             raise RuntimeError('ChannelManager already connected')
 
@@ -1984,7 +1884,7 @@ class ChannelManager(object):
         if self.dispersy:
             for community in self.dispersy.get_communities():
                 if isinstance(community, AllChannelCommunity):
-                    nr_requests_made = community.create_channelsearch(self.searchkeywords, self.gotDispersyRemoteHits)
+                    nr_requests_made = community.create_channelsearch(self.searchkeywords)
                     if not nr_requests_made:
                         self._logger.info("Could not send search in AllChannelCommunity, no verified candidates found")
                     break
@@ -2021,7 +1921,9 @@ class ChannelManager(object):
             self.hits[channel.id] = channel
         return True
 
-    def gotDispersyRemoteHits(self, kws, answers):
+    def gotDispersyRemoteHits(self, subject, changetype, objectID, results):
+        kws = results['keywords']
+        answers = results['torrents']
         if self.searchkeywords == kws:
             channel_cids = answers.keys()
             _, dispersyChannels = self.getChannelsByCID(channel_cids)

@@ -23,7 +23,7 @@ PYTHON="arch -i386 /Library/Frameworks/Python.framework/Versions/$PYTHON_VERSION
 # Arno 2013-02-12: Added libtorrent
 PYTHONPATH="$PWD:$PYTHONPATH"
 PYTHONPATH="$HOME/Workspace/install/python-libs/lib/python2.7/site-packages:$PYTHONPATH"
-PYTHONPATH="$HOME/Workspace/install/libtorrent-rasterbar-0.16.17/lib/python2.7/site-packages:$PYTHONPATH"
+PYTHONPATH="$HOME/Workspace/install/libtorrent-rasterbar-1.0.3/lib/python2.7/site-packages:$PYTHONPATH"
 export PYTHONPATH
 
 # Force 32-bit:
@@ -57,7 +57,6 @@ cp logger.conf dist/installdir/Tribler.app/Contents/Resources/
 # Copy family filter
 cp Tribler/Category/category.conf dist/installdir/Tribler.app/Contents/Resources/Tribler/Category/
 cp Tribler/Category/filter_terms.filter dist/installdir/Tribler.app/Contents/Resources/Tribler/Category/
-cp Tribler/Category/porncat.txt dist/installdir/Tribler.app/Contents/Resources/Tribler/Category/
 
 # Copy anon_test.torrent
 cp anon_test.torrent dist/installdir/Tribler.app/Contents/Resources/

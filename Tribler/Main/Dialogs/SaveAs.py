@@ -105,19 +105,19 @@ class SaveAs(wx.Dialog):
             vSizer.Add(sizer, 1, wx.EXPAND | wx.BOTTOM, 3)
             self.SetSize((600, 385 if self.tunnel_community_enabled else 185))
 
-            # convert tdef into guidbtuple, and collect it using torrentsearch_manager.getTorrent
+            # convert tdef into guidbtuple, and collect it using torrentsearch_manager.downloadTorrentfileFromPeers
             torrent = Torrent.fromTorrentDef(tdef)
             torrentsearch_manager = self.guiutility.torrentsearch_manager
 
-            def callback(saveas_id, torrent_filename):
-                tdef = TorrentDef.load(torrent_filename)
-                event = CollectedEvent(tdef=tdef)
+            def callback(saveas_id, infohash):
                 saveas = wx.FindWindowById(saveas_id)
                 if saveas:
+                    tdef = TorrentDef.load_from_memory(self.utility.session.lm.torrent_store.get(infohash))
+                    event = CollectedEvent(tdef=tdef)
                     wx.PostEvent(saveas, event)
 
             cb = lambda torrent_filename, saveas_id = self.Id: callback(saveas_id, torrent_filename)
-            torrentsearch_manager.getTorrent(torrent, cb)
+            torrentsearch_manager.downloadTorrentfileFromPeers(torrent, cb)
 
         cancel = wx.Button(self, wx.ID_CANCEL)
         cancel.Bind(wx.EVT_BUTTON, self.OnCancel)

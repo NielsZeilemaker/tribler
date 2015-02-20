@@ -9,7 +9,7 @@ import logging
 import binascii
 from datetime import timedelta
 
-from Tribler.Core.simpledefs import (DOWNLOAD, UPLOAD, DLSTATUS_METADATA, DLSTATUS_HASHCHECKING, NTFY_USEREVENTLOG,
+from Tribler.Core.simpledefs import (DOWNLOAD, UPLOAD, DLSTATUS_METADATA, DLSTATUS_HASHCHECKING,
                                      DLSTATUS_WAITING4HASHCHECK)
 from Tribler.Core.osutils import startfile
 from Tribler.Core.CacheDB.sqlitecachedb import forceDBThread
@@ -21,7 +21,7 @@ from Tribler.Main.vwxGUI.widgets import _set_font, TagText, ActionButton, Progre
 from Tribler.Main.vwxGUI.list_body import ListItem
 from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
 from Tribler.Main.vwxGUI.GuiImageManager import GuiImageManager, SMALL_ICON_MAX_DIM
-from Tribler.Main.Utility.GuiDBTuples import MergedDs, Torrent, CollectedTorrent
+from Tribler.Main.Utility.GuiDBTuples import Torrent, CollectedTorrent
 
 from Tribler.Main.globals import DefaultDownloadStartupConfig
 from Tribler.Core.Video.VideoUtility import limit_resolution
@@ -318,6 +318,9 @@ class DoubleLineListItemWithButtons(DoubleLineListItem):
         return button
 
     def ShowSelected(self):
+        if not self:
+            return
+
         DoubleLineListItem.ShowSelected(self)
 
         if self.hide_buttons and self.GetBackgroundColour() == self.list_deselected:
@@ -431,7 +434,7 @@ class TorrentListItem(DoubleLineListItemWithButtons):
 
         bw_alloc = menu.FindItemById(menu.FindItem('Bandwidth allocation..')).GetSubMenu()
         download = self.original_data.ds.get_download() if self.original_data.ds else None
-        if download and download.get_def().get_def_type() == 'torrent':
+        if download:
             bw_alloc.AppendMenu(wx.ID_ANY, 'Set download limit..', self.CreateBandwidthMenu(download, DOWNLOAD, menu))
             bw_alloc.AppendMenu(wx.ID_ANY, 'Set upload limit..', self.CreateBandwidthMenu(download, UPLOAD, menu))
 
@@ -494,32 +497,37 @@ class TorrentListItem(DoubleLineListItemWithButtons):
     def OnRecheck(self, event):
         torrents = self.guiutility.frame.top_bg.GetSelectedTorrents()
         for torrent in torrents:
-            if torrent.dslist[0] and 'metadata' not in torrent.state and 'checking' not in torrent.state:
-                torrent.dslist[0].get_download().force_recheck()
+            if torrent.download_state and 'metadata' not in torrent.state and 'checking' not in torrent.state:
+                torrent.download_state.get_download().force_recheck()
 
     def OnExportTorrent(self, filename):
         torrents = self.guiutility.frame.top_bg.GetSelectedTorrents()
         if len(torrents) == 1:
-            filename = self.guiutility.torrentsearch_manager.getCollectedFilename(torrents[0])
+            torrent_data = self.guiutility.utility.session.get_collected_torrent(torrents[0].infohash)
             dlg = wx.FileDialog(None, message="Select an export destination", defaultFile="%s.torrent" % torrents[0].name, wildcard="*.torrent", style=wx.FD_SAVE | wx.CHANGE_DIR | wx.OVERWRITE_PROMPT)
             dlg.SetDirectory(DefaultDownloadStartupConfig.getInstance().get_dest_dir())
             if dlg.ShowModal() == wx.ID_OK:
                 paths = dlg.GetPaths()
                 if os.path.exists(paths[0]):
                     os.remove(paths[0])
-                shutil.copyfile(filename, paths[0])
+
+                with open(paths[0], "wb") as f:
+                    f.write(torrent_data)
             dlg.Destroy()
+
         elif len(torrents) > 1:
             dlg = wx.DirDialog(None, "Choose where to move the selected torrent(s)", style=wx.DEFAULT_DIALOG_STYLE)
             dlg.SetPath(DefaultDownloadStartupConfig.getInstance().get_dest_dir())
             if dlg.ShowModal() == wx.ID_OK:
                 path = dlg.GetPath()
                 for torrent in torrents:
-                    src_filename = self.guiutility.torrentsearch_manager.getCollectedFilename(torrent)
+                    torrent_data = self.guiutility.utility.session.get_collected_torrent(torrent.infohash)
                     dst_filename = os.path.join(path, "%s.torrent" % torrent.name)
                     if os.path.exists(dst_filename):
                         os.remove(dst_filename)
-                    shutil.copyfile(src_filename, dst_filename)
+
+                    with open(dst_filename, "wb") as f:
+                        f.write(torrent_data)
             dlg.Destroy()
 
     def OnCopyMagnet(self, event):
@@ -551,9 +559,6 @@ class TorrentListItem(DoubleLineListItemWithButtons):
                 added.append(torrent)
 
         if added:
-            ue_db = self.guiutility.utility.session.open_dbhandler(NTFY_USEREVENTLOG)
-            ue_db.addEvent(message="MyChannel: %d manual add(s) from library" % len(added), type=2)
-
             # remote channel link to force reload
             for torrent in added:
                 del torrent.channel
@@ -627,20 +632,15 @@ class TorrentListItem(DoubleLineListItemWithButtons):
             new = os.path.join(new_dir, old_file)
 
         self._logger.info("Creating new downloadconfig")
-        if isinstance(download_state, MergedDs):
-            dslist = download_state.dslist
-        else:
-            dslist = [download_state]
 
         # Move torrents
         storage_moved = False
-        for ds in dslist:
-            download = ds.get_download()
-            if download.get_def().get_def_type() == 'torrent':
-                self._logger.info("Moving from %s to %s newdir %s", old, new, new_dir)
-                download.move_storage(new_dir)
-                if download.get_save_path() == new_dir:
-                    storage_moved = True
+
+        download = download_state.get_download()
+        self._logger.info("Moving from %s to %s newdir %s", old, new, new_dir)
+        download.move_storage(new_dir)
+        if download.get_save_path() == new_dir:
+            storage_moved = True
 
         # If libtorrent hasn't moved the files yet, move them now
         if not storage_moved:
@@ -663,8 +663,8 @@ class TorrentListItem(DoubleLineListItemWithButtons):
         for torrent in torrents:
             if 'completed' in torrent.state or 'seeding' in torrent.state:
                 tdef = torrent.ds.get_download().get_def() if torrent.ds else None
-                if tdef and tdef.get_def_type() == 'torrent':
-                    if UserDownloadChoice.get_singleton().get_download_state(tdef.get_id()) == 'restartseed':
+                if tdef:
+                    if UserDownloadChoice.get_singleton().get_download_state(tdef.get_infohash()) == 'restartseed':
                         enable = False
                         break
         event.Enable(enable)
@@ -686,7 +686,7 @@ class TorrentListItem(DoubleLineListItemWithButtons):
         enable = False
         torrents = self.guiutility.frame.top_bg.GetSelectedTorrents()
         for torrent in torrents:
-            status = torrent.dslist[0].get_status() if torrent.dslist[0] else None
+            status = torrent.download_state.get_status() if torrent.download_state else None
             if status not in [None, DLSTATUS_METADATA, DLSTATUS_HASHCHECKING, DLSTATUS_WAITING4HASHCHECK]:
                 enable = True
                 break
@@ -697,7 +697,7 @@ class TorrentListItem(DoubleLineListItemWithButtons):
         torrents = self.guiutility.frame.top_bg.GetSelectedTorrents()
         for torrent in torrents:
             download = torrent.ds.get_download() if torrent.ds else None
-            if download and download.get_def().get_def_type() == 'torrent':
+            if download:
                 enable = True
                 break
         event.Enable(enable)
@@ -715,8 +715,7 @@ class TorrentListItem(DoubleLineListItemWithButtons):
         enable = False
         torrents = self.guiutility.frame.top_bg.GetSelectedTorrents()
         for torrent in torrents:
-            filename = self.guiutility.torrentsearch_manager.getCollectedFilename(torrent)
-            if filename and os.path.exists(filename):
+            if self.guiutility.utility.session.has_collected_torrent(torrent.infohash):
                 enable = True
                 break
         event.Enable(enable)
@@ -726,7 +725,7 @@ class TorrentListItem(DoubleLineListItemWithButtons):
         torrents = self.guiutility.frame.top_bg.GetSelectedTorrents()
         for torrent in torrents:
             download = torrent.ds.get_download() if torrent.ds else None
-            if download and download.get_def().get_def_type() == 'torrent':
+            if download:
                 enable = True
                 break
         event.Enable(enable)

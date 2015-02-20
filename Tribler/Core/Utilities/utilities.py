@@ -2,15 +2,14 @@
 # see LICENSE.txt for license information
 
 from base64 import encodestring, b32decode
-from Tribler.Core.Utilities.Crypto import sha
-import sys
-import os
 from types import StringType, LongType, IntType, ListType, DictType
 import urlparse
 from traceback import print_exc
 from urlparse import urlsplit, parse_qsl
 import binascii
 import logging
+
+from Tribler.Core.Utilities.bencode import bencode, bdecode
 
 logger = logging.getLogger(__name__)
 
@@ -210,8 +209,6 @@ def isValidURL(url):
     if url.lower().startswith('udp'):    # exception for udp
         url = url.lower().replace('udp', 'http', 1)
     r = urlparse.urlsplit(url)
-    # if DEBUG:
-    #     print >>sys.stderr,"isValidURL:",r
 
     if r[0] == '' or r[1] == '':
         return False
@@ -235,25 +232,8 @@ def show_permid_short(permid):
     # return encodestring(sha(s).digest()).replace("\n","")
 
 
-def find_prog_in_PATH(prog):
-    envpath = unicode(os.path.expandvars('${PATH}').decode(sys.getfilesystemencoding()))
-    if sys.platform == 'win32':
-        splitchar = u';'
-    else:
-        splitchar = u':'
-    paths = envpath.split(splitchar)
-    foundat = None
-    for path in paths:
-        fullpath = os.path.join(path, prog)
-        if os.access(fullpath, os.R_OK | os.X_OK):
-            foundat = fullpath
-            break
-    return foundat
-
-
 def get_collected_torrent_filename(infohash):
-    # Arno: Better would have been the infohash in hex.
-    filename = sha(infohash).hexdigest() + '.torrent'    # notice: it's sha1-hash of infohash
+    filename = binascii.hexlify(infohash) + '.torrent'
     return filename
     # exceptions will be handled by got_metadata()
 
@@ -301,16 +281,25 @@ def parse_magnetlink(url):
     return (dn, xt, trs)
 
 
-if __name__ == '__main__':
+def fix_torrent(file_path):
+    """
+    Reads and checks if a torrent file is valid and tries to overwrite the torrent file with a non-sloppy version.
+    :param file_path: The torrent file path.
+    :return: True if the torrent file is now overwritten with valid information, otherwise False.
+    """
+    f = open(file_path, 'rb')
+    bdata = f.read()
+    f.close()
 
-    torrenta = {'name': 'a', 'swarmsize': 12}
-    torrentb = {'name': 'b', 'swarmsize': 24}
-    torrentc = {'name': 'c', 'swarmsize': 18, 'Web2': True}
-    torrentd = {'name': 'b', 'swarmsize': 36, 'Web2': True}
+    # Check if correct bdata
+    fixed_data = bdata
+    try:
+        bdecode(bdata)
+    except ValueError:
+        # Try reading using sloppy
+        try:
+            fixed_data = bencode(bdecode(bdata, 1))
+        except:
+            fixed_data = None
 
-    torrents = [torrenta, torrentb, torrentc, torrentd]
-    logger.debug(repr(multisort_dictlist(torrents, ["Web2", ("swarmsize", "decrease")])))
-
-
-    # d = {'a':1,'b':[1,2,3],'c':{'c':2,'d':[3,4],'k':{'c':2,'d':[3,4]}}}
-    # print_dict(d)
+    return fixed_data

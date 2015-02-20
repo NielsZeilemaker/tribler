@@ -22,14 +22,11 @@ from conversion import ChannelConversion
 from message import DelayMessageReqChannelMessage
 from payload import (ChannelPayload, TorrentPayload, PlaylistPayload, CommentPayload, ModificationPayload,
                      PlaylistTorrentPayload, MissingChannelPayload, MarkTorrentPayload)
-
-
-if __debug__:
-    from Tribler.dispersy.tool.lencoder import log
-
+from twisted.python.log import msg
+from twisted.internet.task import LoopingCall
+from Tribler.community.bartercast4.statistics import BartercastStatisticTypes, _barter_statistics
 
 logger = logging.getLogger(__name__)
-
 
 def warnDispersyThread(func):
     def invoke_func(*args, **kwargs):
@@ -352,12 +349,13 @@ class ChannelCommunity(Community):
                     peer_id = self._peer_db.addOrGetPeerID(authentication_member.public_key)
 
                 torrentlist.append((self._channel_id, dispersy_id, peer_id, message.payload.infohash, message.payload.timestamp, message.payload.name, message.payload.files, message.payload.trackers))
-
-                # TODO: schedule a request for roothashes
+                _barter_statistics.dict_inc_bartercast(BartercastStatisticTypes.TORRENTS_RECEIVED, message.authentication.member.mid.encode('hex'))
             self._channelcast_db.on_torrents_from_dispersy(torrentlist)
         else:
             for message in messages:
                 self._channelcast_db.newTorrent(message)
+                self._logger.debug("torrent received: %s on channel: %s" % (message.payload.infohash, self._master_member))
+                _barter_statistics.dict_inc_bartercast(BartercastStatisticTypes.TORRENTS_RECEIVED, message.authentication.member.mid.encode('hex'))
 
     def _disp_undo_torrent(self, descriptors, redo=False):
         for _, _, packet in descriptors:
@@ -369,7 +367,7 @@ class ChannelCommunity(Community):
             message = self._dispersy.load_message_by_packetid(self, dispersy_id)
             if message:
                 if not message.undone:
-                    Community.create_undo(self, message)
+                    self.create_undo(message)
 
                 else:  # hmm signal gui that this message has been removed already
                     self._disp_undo_torrent([(None, None, message)])
@@ -379,7 +377,7 @@ class ChannelCommunity(Community):
             message = self._dispersy.load_message_by_packetid(self, dispersy_id)
             if message:
                 if not message.undone:
-                    self._dispersy.create_undo(self, message)
+                    self.create_undo(message)
 
                 else:  # hmm signal gui that this message has been removed already
                     self._disp_undo_playlist([(None, None, message)])
@@ -534,7 +532,7 @@ class ChannelCommunity(Community):
     def remove_comment(self, dispersy_id):
         message = self._dispersy.load_message_by_packetid(self, dispersy_id)
         if message:
-            self._dispersy.create_undo(self, message)
+            self.create_undo(message)
 
     # modify channel, playlist or torrent
     @call_on_reactor_thread
@@ -773,7 +771,7 @@ class ChannelCommunity(Community):
         for dispersy_id in dispersy_ids:
             message = self._dispersy.load_message_by_packetid(self, dispersy_id)
             if message:
-                self._dispersy.create_undo(self, message)
+                self.create_undo(message)
 
     @call_on_reactor_thread
     def _disp_create_playlist_torrents(self, playlist_packet, infohashes, store=True, update=True, forward=True):

@@ -74,7 +74,7 @@ from Tribler.Main.vwxGUI.GuiUtility import GUIUtility, forceWxThread
 from Tribler.Main.vwxGUI.MainVideoFrame import VideoDummyFrame
 from Tribler.Main.vwxGUI.GuiImageManager import GuiImageManager
 from Tribler.Main.Dialogs.GUITaskQueue import GUITaskQueue
-from Tribler.Main.globals import DefaultDownloadStartupConfig, get_default_dscfg_filename
+from Tribler.Main.globals import DefaultDownloadStartupConfig
 
 from Tribler.Main.Utility.utility import Utility
 from Tribler.Main.Utility.Feeds.rssparser import RssParser
@@ -96,7 +96,7 @@ from Tribler.Core.simpledefs import (UPLOAD, DOWNLOAD, NTFY_MODIFIED, NTFY_INSER
                                      DLSTATUS_STOPPED, NTFY_DISPERSY, NTFY_STARTED)
 from Tribler.Core.Session import Session
 from Tribler.Core.SessionConfig import SessionStartupConfig
-from Tribler.Core.DownloadConfig import get_default_dest_dir
+from Tribler.Core.DownloadConfig import get_default_dest_dir, get_default_dscfg_filename
 
 from Tribler.Core.Statistics.Status.Status import get_status_holder, delete_status_holders
 from Tribler.Core.Statistics.Status.NullReporter import NullReporter
@@ -127,6 +127,10 @@ DEBUG = False
 DEBUG_DOWNLOADS = False
 ALLOW_MULTIPLE = os.environ.get("TRIBLER_ALLOW_MULTIPLE", "False").lower() == "true"
 
+SKIP_TUNNEL_DIALOG = os.environ.get("TRIBLER_SKIP_OPTIN_DLG", "False") == "True"
+# used by the anon tunnel tests as there's no way to mess with the Session before running the test ATM.
+FORCE_ENABLE_TUNNEL_COMMUNITY = False
+
 #
 #
 # Class : ABCApp
@@ -138,13 +142,12 @@ ALLOW_MULTIPLE = os.environ.get("TRIBLER_ALLOW_MULTIPLE", "False").lower() == "t
 
 class ABCApp(object):
 
-    def __init__(self, params, installdir, is_unit_testing=False):
+    def __init__(self, params, installdir, autoload_discovery=True):
         assert not isInIOThread(), "isInIOThread() seems to not be working correctly"
         self._logger = logging.getLogger(self.__class__.__name__)
 
         self.params = params
         self.installdir = installdir
-        self.is_unit_testing = is_unit_testing
 
         self.state_dir = None
         self.error = None
@@ -172,12 +175,12 @@ class ABCApp(object):
         self.utility = None
 
         # Stage 1 start
-        session = self.InitStage1(installdir)
+        session = self.InitStage1(installdir, autoload_discovery=autoload_discovery)
 
         self.splash = None
         try:
             bm = self.gui_image_manager.getImage(u'splash.png')
-            self.splash = GaugeSplash(bm)
+            self.splash = GaugeSplash(bm, "Loading...")
             self.splash.setTicks(13)
             self.splash.Show()
 
@@ -340,7 +343,7 @@ class ABCApp(object):
 
             self.onError(e)
 
-    def InitStage1(self, installdir):
+    def InitStage1(self, installdir, autoload_discovery=True):
         """ Stage 1 start: pre-start the session to handle upgrade.
         """
         self.gui_image_manager = GuiImageManager.getInstance(installdir)
@@ -402,11 +405,10 @@ class ABCApp(object):
         if not self.sconfig.get_torrent_collecting_dir():
             self.sconfig.set_torrent_collecting_dir(os.path.join(defaultDLConfig.get_dest_dir(), STATEDIR_TORRENTCOLL_DIR))
 
-
-        #TODO(emilon): Quick hack to get 6.4.1 out the door, (re tunnel_community tests disabling is_unit_testing flag)
-        if os.environ.get("TRIBLER_SKIP_OPTIN_DLG", "False") == "True":
+        if FORCE_ENABLE_TUNNEL_COMMUNITY:
             self.sconfig.set_tunnel_community_enabled(True)
-        elif not self.sconfig.get_tunnel_community_optin_dialog_shown() and not self.is_unit_testing:
+
+        if not self.sconfig.get_tunnel_community_optin_dialog_shown() and not SKIP_TUNNEL_DIALOG:
             optin_dialog = wx.MessageDialog(None,
                                             'If you are not familiar with proxy technology, please opt-out.\n\n'
                                             'This experimental anonymity feature using Tor-inspired onion routing '
@@ -418,7 +420,7 @@ class ABCApp(object):
                                             'We are a torrent client and aim to protect you against lawyer-based '
                                             'attacks and censorship.\n'
                                             'With help from many volunteers we are continuously evolving and improving.'
-                                            '\n\nI you aren\'t sure, press Cancel to disable the \n'
+                                            '\n\nIf you aren\'t sure, press Cancel to disable the \n'
                                             'experimental anonymity feature',
                                             'Do you want to use the experimental anonymity feature?',
                                             wx.ICON_WARNING | wx.OK | wx.CANCEL)
@@ -428,7 +430,7 @@ class ABCApp(object):
             optin_dialog.Destroy()
             del optin_dialog
 
-        session = Session(self.sconfig)
+        session = Session(self.sconfig, autoload_discovery=autoload_discovery)
 
         # check and upgrade
         upgrader = session.prestart()
@@ -496,15 +498,9 @@ class ABCApp(object):
             from Tribler.community.channel.community import ChannelCommunity
             from Tribler.community.channel.preview import PreviewChannelCommunity
             from Tribler.community.metadata.community import MetadataCommunity
-<<<<<<< HEAD
-            from Tribler.community.tunnel.community import TunnelCommunity, TunnelSettings
-=======
-            from Tribler.community.tunnel.community import TunnelCommunity
-<<<<<<< HEAD
-            from Tribler.community.doubleentry.community import DoubleEntryCommunity
->>>>>>> 61665bc... DoubleEntry: working community
-=======
->>>>>>> 15cff65... Reverted unnecessary changes to Tribler.
+            from Tribler.community.tunnel.tunnel_community import TunnelSettings
+            from Tribler.community.tunnel.hidden_community import HiddenTunnelCommunity
+            from Tribler.community.bartercast4.community import BarterCommunity
 
             # make sure this is only called once
             session.remove_observer(define_communities)
@@ -520,19 +516,20 @@ class ABCApp(object):
             # must be called on the Dispersy thread
             dispersy.define_auto_load(SearchCommunity, session.dispersy_member, load=True, kargs=default_kwargs)
             dispersy.define_auto_load(AllChannelCommunity, session.dispersy_member, load=True, kargs=default_kwargs)
+            dispersy.define_auto_load(BarterCommunity, session.dispersy_member, load=True)
 
             # load metadata community
-            #dispersy.define_auto_load(MetadataCommunity, session.dispersy_member, load=True, kargs=default_kwargs)
+            # dispersy.define_auto_load(MetadataCommunity, session.dispersy_member, load=True, kargs=default_kwargs)
             dispersy.define_auto_load(ChannelCommunity, session.dispersy_member, load=True, kargs=default_kwargs)
             dispersy.define_auto_load(PreviewChannelCommunity, session.dispersy_member, kargs=default_kwargs)
 
-            if self.sconfig.get_tunnel_community_enabled() and not self.is_unit_testing:
-                keypair = dispersy.crypto.generate_key(u"NID_secp160k1")
+            if self.sconfig.get_tunnel_community_enabled():
+                keypair = dispersy.crypto.generate_key(u"curve25519")
                 dispersy_member = dispersy.get_member(private_key=dispersy.crypto.key_to_bin(keypair),)
                 settings = TunnelSettings(session.get_install_dir())
                 tunnel_kwargs = {'tribler_session': session, 'settings': settings}
 
-                self.tunnel_community = dispersy.define_auto_load(TunnelCommunity, dispersy_member, load=True,
+                self.tunnel_community = dispersy.define_auto_load(HiddenTunnelCommunity, dispersy_member, load=True,
                                                                   kargs=tunnel_kwargs)[0]
 
                 session.set_anon_proxy_settings(2, ("127.0.0.1", session.get_tunnel_community_socks5_listen_ports()))
@@ -617,6 +614,9 @@ class ABCApp(object):
             return nr_connections, nr_channel_connections
 
         def do_wx(delayedResult):
+            if not self.frame:
+                return
+
             nr_connections, nr_channel_connections = delayedResult.get()
 
             # self.frame.SRstatusbar.set_reputation(myRep, total_down, total_up)
@@ -650,14 +650,19 @@ class ABCApp(object):
 
         try:
             # Print stats on Console
-            if DEBUG:
-                if self.ratestatecallbackcount % 5 == 0:
-                    for ds in dslist:
-                        safename = repr(ds.get_download().get_def().get_name())
-                        self._logger.debug("%s %s %.1f%% dl %.1f ul %.1f n %d", safename, dlstatus_strings[ds.get_status()], 100.0 * ds.get_progress(), ds.get_current_speed(DOWNLOAD), ds.get_current_speed(UPLOAD), ds.get_num_peers())
-                        # print >>sys.stderr,"main: Infohash:",`ds.get_download().get_def().get_infohash()`
-                        if ds.get_status() == DLSTATUS_STOPPED_ON_ERROR:
-                            self._logger.debug("main: Error: %s", repr(ds.get_error()))
+            if self.ratestatecallbackcount % 5 == 0:
+                for ds in dslist:
+                    safename = repr(ds.get_download().get_def().get_name())
+                    self._logger.debug("%s %s %.1f%% dl %.1f ul %.1f n %d", safename, dlstatus_strings[ds.get_status()], 100.0 * ds.get_progress(), ds.get_current_speed(DOWNLOAD), ds.get_current_speed(UPLOAD), ds.get_num_peers())
+                    if ds.get_status() == DLSTATUS_STOPPED_ON_ERROR:
+                        self._logger.error("main: Error: %s", repr(ds.get_error()))
+                        # show error dialog
+                        dlg = wx.MessageDialog(self.frame,
+                                               "Download stopped on error: %s" % repr(ds.get_error()),
+                                               "Download Error",
+                                               wx.OK | wx.ICON_ERROR)
+                        dlg.ShowModal()
+                        dlg.Destroy()
 
             # Pass DownloadStates to libaryView
             no_collected_list = []
@@ -678,8 +683,8 @@ class ABCApp(object):
             doCheckpoint = False
             for ds in dslist:
                 state = ds.get_status()
-                cdef = ds.get_download().get_def()
-                safename = cdef.get_name_as_unicode() if cdef.get_def_type() == 'torrent' else cdef.get_name()
+                tdef = ds.get_download().get_def()
+                safename = tdef.get_name_as_unicode()
 
                 if state == DLSTATUS_DOWNLOADING:
                     newActiveDownloads.append(safename)
@@ -687,15 +692,15 @@ class ABCApp(object):
                 elif state == DLSTATUS_SEEDING:
                     if safename in self.prevActiveDownloads:
                         download = ds.get_download()
-                        cdef = download.get_def()
+                        tdef = download.get_def()
 
                         coldir = os.path.basename(os.path.abspath(self.utility.session.get_torrent_collecting_dir()))
                         destdir = os.path.basename(download.get_dest_dir())
                         if destdir != coldir:
-                            hash = cdef.get_id()
+                            infohash = tdef.get_infohash()
 
                             notifier = Notifier.getInstance()
-                            notifier.notify(NTFY_TORRENTS, NTFY_FINISHED, hash, safename)
+                            notifier.notify(NTFY_TORRENTS, NTFY_FINISHED, infohash, safename)
 
                             doCheckpoint = True
 
@@ -768,7 +773,7 @@ class ABCApp(object):
 
         storage_locations = defaultdict(list)
         for download in self.utility.session.get_downloads():
-            if download.get_def().get_def_type() == 'torrent' and download.get_status() == DLSTATUS_DOWNLOADING:
+            if download.get_status() == DLSTATUS_DOWNLOADING:
                 storage_locations[download.get_dest_dir()].append(download)
 
         show_message = False
@@ -952,18 +957,26 @@ class ABCApp(object):
 
     @forceWxThread
     def OnExit(self):
+
+        bm = self.gui_image_manager.getImage(u'closescreen.png')
+        self.closewindow = GaugeSplash(bm, "Closing...")
+        self.closewindow.setTicks(6)
+        self.closewindow.Show()
+
         self._logger.info("main: ONEXIT")
         self.ready = False
         self.done = True
 
         # Remove anonymous test download
+        self.closewindow.tick('Remove anonymous test download')
         for download in self.utility.session.get_downloads():
             tdef = download.get_def()
-            if tdef.get_def_type() == 'torrent' and not tdef.is_anonymous() and download.get_anon_mode() and \
+            if not tdef.is_anonymous() and download.get_anon_mode() and \
                os.path.basename(download.get_dest_dir()) == "anon_test":
                 self.utility.session.remove_download(download)
 
         # write all persistent data to disk
+        self.closewindow.tick('Write all persistent data to disk')
         if self.i2is:
             self.i2is.shutdown()
         if self.torrentfeed:
@@ -989,12 +1002,14 @@ class ABCApp(object):
             session_shutdown_start = time()
 
             try:
-                self._logger.info("main: ONEXIT cleaning database")
+                self._logger.info("ONEXIT cleaning database")
+                self.closewindow.tick('Cleaning database')
                 peerdb = self.utility.session.open_dbhandler(NTFY_PEERS)
                 peerdb._db.clean_db(randint(0, 24) == 0, exiting=True)
             except:
                 print_exc()
 
+            self.closewindow.tick('Shutdown session')
             self.utility.session.shutdown(hacksessconfcheckpoint=False)
 
             # Arno, 2012-07-12: Shutdown should be quick
@@ -1006,11 +1021,12 @@ class ABCApp(object):
                     self._logger.info("main: ONEXIT NOT Waiting for Session to shutdown, took too long")
                     break
 
-                self._logger.info("main: ONEXIT Waiting for Session to shutdown, will wait for an additional %d seconds", waittime - diff)
+                self._logger.info("ONEXIT Waiting for Session to shutdown, will wait for an additional %d seconds", waittime - diff)
                 sleep(3)
-            self._logger.info("main: ONEXIT Session is shutdown")
+            self._logger.info("ONEXIT Session is shutdown")
 
-        print >> sys.stderr, "ONEXIT deleting instances"
+        self.closewindow.tick('Deleting instances')
+        self._logger.debug("ONEXIT deleting instances")
 
         Session.del_instance()
         GUIUtility.delInstance()
@@ -1018,17 +1034,21 @@ class ABCApp(object):
         DefaultDownloadStartupConfig.delInstance()
         GuiImageManager.delInstance()
 
+        self.closewindow.tick('Exiting now')
+
+        self.closewindow.Destroy()
+
         return 0
 
     def db_exception_handler(self, e):
-        self._logger.debug("main: Database Exception handler called %s value %s #", e, e.args)
+        self._logger.debug("Database Exception handler called %s value %s #", e, e.args)
         try:
             if e.args[1] == "DB object has been closed":
                 return  # We caused this non-fatal error, don't show.
             if self.error is not None and self.error.args[1] == e.args[1]:
                 return  # don't repeat same error
         except:
-            self._logger.error("main: db_exception_handler error %s %s", e, type(e))
+            self._logger.error("db_exception_handler error %s %s", e, type(e))
             print_exc()
             # print_stack()
 
@@ -1080,7 +1100,7 @@ class ABCApp(object):
 #
 #
 @attach_profiler
-def run(params=None, is_unit_testing=False):
+def run(params=None, autoload_discovery=True):
     if params is None:
         params = [""]
 
@@ -1108,6 +1128,7 @@ def run(params=None, is_unit_testing=False):
                     import ctypes
                     x11 = ctypes.cdll.LoadLibrary('libX11.so.6')
                     x11.XInitThreads()
+                    os.environ["TRIBLER_INITTHREADS"] = "False"
                 except OSError as e:
                     logger.debug("Failed to call XInitThreads '%s'", str(e))
                 except:
@@ -1117,7 +1138,7 @@ def run(params=None, is_unit_testing=False):
             app = wx.GetApp()
             if not app:
                 app = wx.PySimpleApp(redirect=False)
-            abc = ABCApp(params, installdir, is_unit_testing)
+            abc = ABCApp(params, installdir, autoload_discovery=autoload_discovery)
             if abc.frame:
                 app.SetTopWindow(abc.frame)
                 abc.frame.set_wxapp(app)

@@ -3,25 +3,25 @@
 import os
 import sys
 import time
-
+from os import environ
 from threading import Event
 from traceback import print_exc
-from twisted.internet import reactor
 
+from nose.tools import timed
+
+from Tribler.Core.DecentralizedTracking.pymdht.core.identifier import Id
+from Tribler.Core.Utilities.twisted_thread import reactor
 from Tribler.Core.simpledefs import dlstatus_strings
 from Tribler.Test.test_as_server import TestGuiAsServer, BASE_DIR
 from Tribler.dispersy.candidate import Candidate
 from Tribler.dispersy.util import blockingCallFromThread
-from Tribler.community.tunnel.community import TunnelCommunity, TunnelSettings
-from Tribler.Core.DecentralizedTracking.pymdht.core.identifier import Id
+from Tribler.community.tunnel.tunnel_community import TunnelSettings
+from Tribler.community.tunnel.hidden_community import HiddenTunnelCommunity
 
-
-#TODO(emilon): Quick hack to get 6.4.1 out the door, (re tunnel_community tests disabling is_unit_testing flag)
-from os import environ
-environ["TRIBLER_SKIP_OPTIN_DLG"] = "True"
 
 class TestTunnelCommunity(TestGuiAsServer):
 
+    @timed(120)
     def test_anon_download(self):
         def take_second_screenshot():
             self.screenshot()
@@ -34,7 +34,7 @@ class TestTunnelCommunity(TestGuiAsServer):
 
         def on_fail(expected, reason, do_assert):
             dispersy = self.session.lm.dispersy
-            tunnel_community = next(c for c in dispersy.get_communities() if isinstance(c, TunnelCommunity))
+            tunnel_community = next(c for c in dispersy.get_communities() if isinstance(c, HiddenTunnelCommunity))
 
             self.guiUtility.ShowPage('networkgraph')
 
@@ -67,6 +67,7 @@ class TestTunnelCommunity(TestGuiAsServer):
 
         self.startTest(do_create_local_torrent)
 
+    @timed(120)
     def test_anon_tunnel(self):
         got_data = Event()
         this = self
@@ -100,6 +101,7 @@ class TestTunnelCommunity(TestGuiAsServer):
 
         self.startTest(replace_socks)
 
+    @timed(120)
     def test_hidden_services(self):
         def take_second_screenshot():
             self.screenshot()
@@ -112,7 +114,7 @@ class TestTunnelCommunity(TestGuiAsServer):
 
         def on_fail(expected, reason, do_assert):
             dispersy = self.session.lm.dispersy
-            tunnel_community = next(c for c in dispersy.get_communities() if isinstance(c, TunnelCommunity))
+            tunnel_community = next(c for c in dispersy.get_communities() if isinstance(c, HiddenTunnelCommunity))
 
             self.guiUtility.ShowPage('networkgraph')
 
@@ -193,7 +195,7 @@ class TestTunnelCommunity(TestGuiAsServer):
             dht = Event()
             def dht_announce(info_hash, community):
                 def cb_dht(info_hash, peers, source):
-                    print >> sys.stderr, "announced %s to the DHT" % info_hash.encode('hex')
+                    self._logger.debug("announced %s to the DHT", info_hash.encode('hex'))
                     dht.set()
                 port = community.trsession.get_dispersy_port()
                 community.trsession.lm.mainline_dht.get_peers(info_hash, Id(info_hash), cb_dht, bt_port=port)
@@ -205,6 +207,9 @@ class TestTunnelCommunity(TestGuiAsServer):
         self.startTest(setup_seeder)
 
     def startTest(self, callback, min_timeout=5):
+        from Tribler.Main import tribler_main
+        tribler_main.FORCE_ENABLE_TUNNEL_COMMUNITY = True
+
         self.getStateDir()  # getStateDir copies the bootstrap file into the statedir
 
         def setup_proxies():
@@ -214,7 +219,7 @@ class TestTunnelCommunity(TestGuiAsServer):
 
             # Connect the proxies to the Tribler instance
             for community in self.lm.dispersy.get_communities():
-                if isinstance(community, TunnelCommunity):
+                if isinstance(community, HiddenTunnelCommunity):
                     tunnel_communities.append(community)
                     community.settings.min_circuits = 3
                     # Cancel 50 MB test download
@@ -241,7 +246,7 @@ class TestTunnelCommunity(TestGuiAsServer):
             config.set_dispersy(True)
             config.set_state_dir(self.getStateDir(index))
 
-            session = Session(config, ignore_singleton=True)
+            session = Session(config, ignore_singleton=True, autoload_discovery=False)
             upgrader = session.prestart()
             while not upgrader.is_done:
                 time.sleep(0.1)
@@ -254,15 +259,15 @@ class TestTunnelCommunity(TestGuiAsServer):
             dispersy = session.get_dispersy_instance()
 
             def load_community(session):
-                keypair = dispersy.crypto.generate_key(u"NID_secp160k1")
+                keypair = dispersy.crypto.generate_key(u"curve25519")
                 dispersy_member = dispersy.get_member(private_key=dispersy.crypto.key_to_bin(keypair))
                 settings = TunnelSettings()
                 settings.do_test = False
-                return dispersy.define_auto_load(TunnelCommunity, dispersy_member, (session, settings), load=True)[0]
+                return dispersy.define_auto_load(HiddenTunnelCommunity, dispersy_member, (session, settings), load=True)[0]
 
             return blockingCallFromThread(reactor, load_community, session)
 
-        TestGuiAsServer.startTest(self, setup_proxies, force_is_unit_testing=False)
+        TestGuiAsServer.startTest(self, setup_proxies, autoload_discovery=False)
 
     def setupSeeder(self):
         from Tribler.Core.Session import Session
@@ -274,7 +279,7 @@ class TestTunnelCommunity(TestGuiAsServer):
 
         self.config2 = self.config.copy()
         self.config2.set_state_dir(self.getStateDir(2))
-        self.session2 = Session(self.config2, ignore_singleton=True)
+        self.session2 = Session(self.config2, ignore_singleton=True, autoload_discovery=False)
         upgrader = self.session2.prestart()
         while not upgrader.is_done:
             time.sleep(0.1)
@@ -297,13 +302,10 @@ class TestTunnelCommunity(TestGuiAsServer):
 
     def seeder_state_callback(self, ds):
         d = ds.get_download()
-        print >> sys.stderr, "test: seeder:", repr(d.get_def().get_name()), dlstatus_strings[ds.get_status()], ds.get_progress()
+        self._logger.debug("seeder: %s %s %s", repr(d.get_def().get_name()), dlstatus_strings[ds.get_status()], ds.get_progress())
         return 5.0, False
 
     def setUp(self):
-        with open("bootstraptribler.txt", "w") as f:
-            f.write("127.0.0.1 1")
-
         TestGuiAsServer.setUp(self)
         self.sessions = []
         self.session2 = None
@@ -327,6 +329,5 @@ class TestTunnelCommunity(TestGuiAsServer):
         for session in self.sessions:
             self._shutdown_session(session)
 
-        os.unlink("bootstraptribler.txt")
         time.sleep(10)
         TestGuiAsServer.tearDown(self)

@@ -9,6 +9,10 @@ from Tribler.Main.vwxGUI.list_item import ChannelListItem
 
 class TestRemoteQuery(TestGuiAsServer):
 
+    def setUpPreSession(self):
+        super(TestRemoteQuery, self).setUpPreSession()
+        self.config.set_torrent_store(True)
+
     def test_remotesearch(self):
         def do_assert():
             self.screenshot('After doing mp3 search, got %d results' % self.frame.searchlist.GetNrResults())
@@ -100,13 +104,13 @@ class TestRemoteQuery(TestGuiAsServer):
     def startTest(self, callback, search_comm=True):
         if search_comm:
             def wait_for_search():
-                print >> sys.stderr, "tgs: frame ready, staring to wait for search to be ready"
+                self._logger.debug("Frame ready, starting to wait for search to be ready")
                 self.CallConditional(300, lambda: self.frame.SRstatusbar.GetConnections() > 0.75, callback, 'did not connect to 75% of expected peers within 300s')
             super(TestRemoteQuery, self).startTest(wait_for_search)
 
         else:
             def wait_for_chansearch():
-                print >> sys.stderr, "tgs: frame ready, staring to wait for channelsearch to be ready"
+                self._logger.debug("Frame ready, starting to wait for channelsearch to be ready")
                 self.CallConditional(300, lambda: self.frame.SRstatusbar.GetChannelConnections() > 10, callback, 'did not connect to more than 10 peers within 300s', assertCallback=lambda *argv, **kwarg: callback())
             super(TestRemoteQuery, self).startTest(wait_for_chansearch)
 

@@ -50,7 +50,7 @@ READSIZE = 100000
 class RawServer(object):
 
     def __init__(self, doneflag, timeout_check_interval, timeout, noisy=True, ipv6_enable=True,
-                 failfunc=lambda x: None, errorfunc=None, sockethandler=None, excflag=Event()):
+                 fatal_func=lambda x: None, nonfatal_func=None, sockethandler=None, excflag=Event()):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         self.timeout_check_interval = timeout_check_interval
@@ -60,8 +60,8 @@ class RawServer(object):
         self.dead_from_write = []
         self.doneflag = doneflag
         self.noisy = noisy
-        self.failfunc = failfunc
-        self.errorfunc = errorfunc
+        self.fatal_func = fatal_func
+        self.nonfatal_func = nonfatal_func
         self.exccount = 0
         self.funcs = []
         self.externally_added = []
@@ -88,8 +88,6 @@ class RawServer(object):
         insort(self.funcs, (clock() + delay, func, id))
 
     def add_task(self, func, delay=0, id=None):
-        # if DEBUG:
-        #    print >>sys.stderr,"rawserver: add_task(",func,delay,")"
         if delay < 0:
             delay = 0
 
@@ -147,32 +145,23 @@ class RawServer(object):
                     if period < 0:
                         period = 0
 
-                    # if DEBUG:
-                    #    print >>sys.stderr,"rawserver: do_poll",period
                     events = self.sockethandler.do_poll(period)
 
                     if self.doneflag.isSet():
                         self._logger.debug("rawserver: stopping because done flag set")
                         return
 
-                    # print >>sys.stderr,"RawServer: funcs is",`self.funcs`
-
                     while self.funcs and self.funcs[0][0] <= clock() and not self.doneflag.isSet():
                         garbage1, func, id = self.funcs.pop(0)
                         if id in self.tasks_to_kill:
                             pass
                         try:
-#                            print func.func_name
                             if func.func_name != "_bgalloc":
                                 self._logger.debug("RawServer:f %s", func.func_name)
-                            # st = time.time()
                             func()
-                            # et = time.time()
-                            # diff = et - st
-                            # print >>sys.stderr,func,"took %.5f" % (diff)
 
                         except (SystemError, MemoryError) as e:
-                            self.failfunc(e)
+                            self.fatal_func(e)
                             return
                         except KeyboardInterrupt as e:
 #                            self.exception(e)
@@ -198,7 +187,7 @@ class RawServer(object):
 
                 except (SystemError, MemoryError) as e:
                     self._logger.debug("rawserver: SYS/MEM exception %s", e)
-                    self.failfunc(e)
+                    self.fatal_func(e)
                     return
 
                 except error:
@@ -206,7 +195,7 @@ class RawServer(object):
                     print_exc()
 
                 except KeyboardInterrupt as e:
-                    self.failfunc(e)
+                    self.fatal_func(e)
                     return
 
                 except Exception as e:
@@ -218,10 +207,6 @@ class RawServer(object):
                     self._logger.debug("rawserver: other exception")
                     print_exc()
                     self.exception(e)
-                # Arno: Don't stop till we drop
-                # if self.exccount > 10:
-                # print >> sys.stderr,"rawserver: stopping because exccount > 10"
-                # return
         finally:
 #            self.sockethandler.shutdown()
             self.finished.set()
@@ -248,11 +233,11 @@ class RawServer(object):
         if not kbint:
             self.excflag.set()
         self.exccount += 1
-        if self.errorfunc is None:
+        if self.nonfatal_func is None:
             print_exc()
         else:
             if not kbint:   # don't report here if it's a keyboard interrupt
-                self.errorfunc(e)
+                self.nonfatal_func(e)
 
     def shutdown(self):
         self.sockethandler.shutdown()

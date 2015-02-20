@@ -4,7 +4,7 @@ import sys
 import os
 import datetime
 
-from Tribler.community.tunnel.community import TunnelCommunity
+from Tribler.community.tunnel.hidden_community import HiddenTunnelCommunity
 from Tribler.community.tunnel.routing import Hop
 
 import random
@@ -56,7 +56,7 @@ class Home(wx.Panel):
         if sys.platform == 'darwin':  # mac
             self.searchBox = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         else:
-            self.searchBox = TextCtrlAutoComplete(self, entrycallback=parent.top_bg.complete, selectcallback=parent.top_bg.OnAutoComplete)
+            self.searchBox = TextCtrlAutoComplete(self, entrycallback=parent.top_bg.complete)
 
         font = self.searchBox.GetFont()
         font.SetPointSize(font.GetPointSize() * 2)
@@ -537,6 +537,9 @@ class PopularTorrentPanel(NewTorrentPanel):
 
     @forceWxThread
     def _RefreshList(self, topTen):
+        if not self:
+            return
+
         self.list.Freeze()
         self.list.DeleteAllItems()
         for item in topTen:
@@ -599,7 +602,7 @@ class NetworkGraphPanel(wx.Panel):
 
     def try_community(self):
         try:
-            tunnel_community = (c for c in self.dispersy.get_communities() if isinstance(c, TunnelCommunity)).next()
+            tunnel_community = (c for c in self.dispersy.get_communities() if isinstance(c, HiddenTunnelCommunity)).next()
             self.found_community(tunnel_community)
         except:
             wx.CallLater(1000, self.try_community)
@@ -931,7 +934,9 @@ class ArtworkPanel(wx.Panel):
         if len(torrents) == 0:
             non_torrents = self.guiutility.torrentsearch_manager.getNotCollectedThumbnailTorrents(limit=self.max_torrents)
             for torrent in non_torrents:
-                self.guiutility.torrentsearch_manager.getTorrent(torrent, lambda _: self.refreshNow(), prio=2)
+                self.guiutility.torrentsearch_manager.downloadTorrentfileFromPeers(torrent,
+                                                                                   lambda _: self.refreshNow(),
+                                                                                   prio=2)
 
         return torrents
 

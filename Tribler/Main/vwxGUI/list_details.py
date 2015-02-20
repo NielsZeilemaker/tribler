@@ -13,7 +13,7 @@ from Tribler.Core.osutils import startfile
 from Tribler.Core.simpledefs import (DLSTATUS_ALLOCATING_DISKSPACE, DLSTATUS_WAITING4HASHCHECK, DLSTATUS_HASHCHECKING,
                                      DLSTATUS_DOWNLOADING, DLSTATUS_SEEDING, DLSTATUS_STOPPED,
                                      DLSTATUS_STOPPED_ON_ERROR, DLSTATUS_METADATA, UPLOAD, DOWNLOAD, NTFY_TORRENTS,
-                                     NTFY_USEREVENTLOG, NTFY_VIDEO_ENDED, DLMODE_VOD)
+                                     NTFY_VIDEO_ENDED, DLMODE_VOD)
 from Tribler.Core.CacheDB.sqlitecachedb import forceDBThread
 from Tribler.Core.Video.utils import videoextdefaults
 from Tribler.Core.Video.VideoUtility import limit_resolution
@@ -127,7 +127,6 @@ class TorrentDetails(AbstractDetails):
 
         self.guiutility = GUIUtility.getInstance()
         self.utility = self.guiutility.utility
-        self.uelog = self.utility.session.open_dbhandler(NTFY_USEREVENTLOG)
 
         self.parent = parent
         self.torrent = Torrent('0', '0', '', '', 0, 0, 0, 0, 0, None)
@@ -178,8 +177,7 @@ class TorrentDetails(AbstractDetails):
             self.torrent = torrent
             self.showTorrent(self.torrent)
 
-            filename = self.guiutility.torrentsearch_manager.getCollectedFilename(self.torrent, retried=True)
-            if filename:
+            if self.guiutility.utility.session.has_collected_torrent(self.torrent.infohash):
                 self.guiutility.torrentsearch_manager.loadTorrent(self.torrent, callback=self.showTorrent)
             else:
                 def doGui(delayedResult):
@@ -192,6 +190,9 @@ class TorrentDetails(AbstractDetails):
                     self.timeouttimer = wx.CallLater(10000, timeout) if not self.guiutility.frame.librarylist.IsShownOnScreen() else None
 
                 def timeout():
+                    # Avoid WxPyDeadObject exception
+                    if not self:
+                        return
                     self.messageText.SetLabel("Failed loading torrent.\nPlease click retry or wait to allow other peers to respond.")
                     self.messageGauge.Show(False)
                     self.messageButton.Show(True)
@@ -557,7 +558,10 @@ class TorrentDetails(AbstractDetails):
             if metadata:
                 return metadata.get('description', '')
 
-        def set_description(description):
+        def set_description(widget_id, description):
+            if not wx.FindWindowById(widget_id):
+                return
+
             if not description:
                 if self.canEdit:
                     description = 'No description yet, be the first to add a description.'
@@ -572,10 +576,11 @@ class TorrentDetails(AbstractDetails):
             self.description.Show(show_description)
 
         the_description = self.torrent.get('description', '')
+        wid = self.GetId()
         if not the_description:
-            startWorker(lambda delayedResult: set_description(delayedResult.get()), do_db)
+            startWorker(lambda delayedResult, widget_id=wid: set_description(widget_id, delayedResult.get()), do_db)
         else:
-            set_description(the_description)
+            set_description(wid, the_description)
 
     def updateFilesTab(self):
         self.filesList.DeleteAllItems()
@@ -737,18 +742,6 @@ class TorrentDetails(AbstractDetails):
             editable.Saved()
 
     @warnWxThread
-    def OnDrag(self, event):
-        if event.LeftIsDown():
-            filename = self.guiutility.torrentsearch_manager.getCollectedFilename(self.torrent)
-            if filename:
-                tdo = wx.FileDataObject()
-                tdo.AddFile(filename)
-
-                tds = wx.DropSource(self)
-                tds.SetData(tdo)
-                tds.DoDragDrop(True)
-
-    @warnWxThread
     def OnDoubleClick(self, event):
         selected = self.filesList.GetFirstSelected()
         playable_files = self.torrent.videofiles
@@ -804,7 +797,7 @@ class TorrentDetails(AbstractDetails):
             menu.Append(itemid, label)
             menu.Enable(itemid, enabled)
             if enabled:
-                menu.Bind(wx.EVT_MENU, lambda evt, d=download, f=files: self.guiutility.frame.modifySelection(d, f), id=itemid)
+                menu.Bind(wx.EVT_MENU, lambda evt, d=download, f=files: d.set_selected_files(f), id=itemid)
 
         self.PopupMenu(menu, self.ScreenToClient(wx.GetMousePosition()))
         menu.Destroy()
@@ -892,6 +885,9 @@ class TorrentDetails(AbstractDetails):
 
     @forceDBThread
     def UpdateHealth(self):
+        if not (self and self.torrent and self.torrent.swarminfo):
+            return
+
         # touch swarminfo property
         _, _, last_check = self.torrent.swarminfo
 
@@ -908,6 +904,8 @@ class TorrentDetails(AbstractDetails):
 
     @forceWxThread
     def ShowHealth(self, updating, no_update_reason=''):
+        if not self:
+            return
         if isinstance(self.torrent, CollectedTorrent):
             updating = ', updating now' if updating else no_update_reason
 
@@ -935,15 +933,16 @@ class TorrentDetails(AbstractDetails):
     def OnRefresh(self, dslist, magnetlist):
         found = False
 
-        for ds in dslist:
-            if self.torrent.addDs(ds):
-                found = True
+        if self and self.torrent:  # avoid pydeadobject error
+            for ds in dslist:
+                if self.torrent.addDs(ds):
+                    found = True
 
-        self.torrent.magnetstatus = magnetlist.get(self.torrent.infohash, None)
+            self.torrent.magnetstatus = magnetlist.get(self.torrent.infohash, None)
 
-        if not found:
-            self.torrent.clearDs()
-        self._Refresh()
+            if not found:
+                self.torrent.clearDs()
+            self._Refresh()
 
     @warnWxThread
     def _Refresh(self, ds=None):
@@ -1366,10 +1365,8 @@ class LibraryDetails(TorrentDetails):
             if self.old_progress != dsprogress and self.filesList.GetItemCount() > 0:
                 completion = {}
 
-                useSimple = ds.get_download().get_def().get_def_type() == 'swift' or self.filesList.GetItemCount() > 100
+                useSimple = self.filesList.GetItemCount() > 100
                 selected_files = ds.get_download().get_selected_files()
-                if ds.get_download().get_def().get_def_type() == 'swift':
-                    selected_files = [file.split('/')[1] for file in selected_files]
                 if useSimple:
                     if selected_files:
                         for i in range(self.filesList.GetItemCount()):
@@ -1449,7 +1446,6 @@ class ChannelDetails(AbstractDetails):
 
         self.guiutility = GUIUtility.getInstance()
         self.utility = self.guiutility.utility
-        self.uelog = self.utility.session.open_dbhandler(NTFY_USEREVENTLOG)
 
         self.parent = parent
         self.channel = None
@@ -1539,7 +1535,6 @@ class PlaylistDetails(AbstractDetails):
 
         self.guiutility = GUIUtility.getInstance()
         self.utility = self.guiutility.utility
-        self.uelog = self.utility.session.open_dbhandler(NTFY_USEREVENTLOG)
 
         self.parent = parent
         self.playlist = None
@@ -1688,7 +1683,6 @@ class AbstractInfoPanel(FancyPanel):
 
         self.guiutility = GUIUtility.getInstance()
         self.utility = self.guiutility.utility
-        self.uelog = self.utility.session.open_dbhandler(NTFY_USEREVENTLOG)
 
         self.parent = parent
         self.SetBackgroundColour(GRADIENT_LGREY, GRADIENT_DGREY)
@@ -2353,7 +2347,7 @@ class VideoplayerExpandedPanel(wx.lib.scrolledpanel.ScrolledPanel):
 
         vod_dl = VideoPlayer.getInstance().get_vod_download()
         if vod_dl and vod_dl.get_vod_fileindex() == fileindex:
-            self.library_manager.stopTorrent(self.tdef.get_id())
+            self.library_manager.stopTorrent(self.tdef.get_infohash())
             self.library_manager.last_vod_torrent = None
 
     def SetNrFiles(self, nr):
@@ -2409,7 +2403,7 @@ class VideoplayerExpandedPanel(wx.lib.scrolledpanel.ScrolledPanel):
                 self.fileindex = link.fileindex
                 self.DoHighlight()
                 # This needs to be in a CallAfter, or VLC may crash.
-                wx.CallAfter(lambda: self.library_manager.playTorrent(self.tdef.get_id(), self.tdef.get_files_as_unicode()[self.fileindex]))
+                wx.CallAfter(lambda: self.library_manager.playTorrent(self.tdef.get_infohash(), self.tdef.get_files_as_unicode()[self.fileindex]))
 
         for link in self.links:
             mousepos = wx.GetMousePosition()
@@ -2422,7 +2416,7 @@ class VideoplayerExpandedPanel(wx.lib.scrolledpanel.ScrolledPanel):
     def OnVideoEnded(self, subject, changeType, torrent_tuple):
         infohash, fileindex = torrent_tuple
 
-        if not self.tdef or self.tdef.get_id() != infohash:
+        if not self.tdef or self.tdef.get_infohash() != infohash:
             return
 
         for index, control in enumerate(self.links):
@@ -2433,4 +2427,4 @@ class VideoplayerExpandedPanel(wx.lib.scrolledpanel.ScrolledPanel):
                     control_next.SetForegroundColour(TRIBLER_RED)
                     self.fileindex = control_next.fileindex
                     self.DoHighlight()
-                    self.library_manager.playTorrent(self.tdef.get_id(), self.tdef.get_files_as_unicode()[control_next.fileindex])
+                    self.library_manager.playTorrent(self.tdef.get_infohash(), self.tdef.get_files_as_unicode()[control_next.fileindex])

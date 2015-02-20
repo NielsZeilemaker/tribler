@@ -2,13 +2,12 @@
 # see LICENSE.txt for license information
 
 import unittest
-import wx
 import binascii
 import os
 from threading import Event
 from traceback import print_exc
 
-from Tribler.Test.test_as_server import TestGuiAsServer, BASE_DIR
+from Tribler.Test.test_as_server import TestGuiAsServer, BASE_DIR, wx  # import wx after selecting the WX version
 
 from Tribler.Main.Dialogs.ConfirmationDialog import ConfirmationDialog
 from Tribler.Main.Dialogs.AddTorrent import AddTorrent
@@ -87,8 +86,8 @@ class TestGuiDialogs(TestGuiAsServer):
             self.assert_(isinstance(dialog, SaveAs), 'could not find SaveAs')
 
             self.screenshot('Screenshot of SaveAs', window=dialog)
-            self.Call(1, lambda: dialog.EndModal(wx.ID_CANCEL))
-            self.Call(2, lambda: add_dialog.EndModal(wx.ID_CANCEL))
+            self.Call(1, lambda: dialog and dialog.EndModal(wx.ID_CANCEL))
+            self.Call(2, lambda: add_dialog and add_dialog.EndModal(wx.ID_CANCEL))
             self.Call(3, self.quit)
 
         def do_save_dialog():

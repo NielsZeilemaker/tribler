@@ -252,13 +252,7 @@ class ListItem(wx.Panel):
 
     def RefreshColumn(self, columnindex, data):
         new_controls = has_changed = False
-        try:
-            column = self.columns[columnindex]
-        except Exception as e:
-            print >> sys.stderr, "RefreshColumn ERROR %s" % e
-            print >> sys.stderr, "RefreshColumn ERROR %s" % self.__class__.__name__
-            print >> sys.stderr, "RefreshColumn ERROR columnindex = %s, len(self.columns) = %s, self.columns = %s" % (columnindex, len(self.columns), self.columns)
-            raise e
+        column = self.columns[columnindex]
 
         prevdata = self.data[columnindex]
         self.data[columnindex] = data
@@ -515,7 +509,7 @@ class ListItem(wx.Panel):
         return False
 
     def __str__(self):
-        return "ListItem " + " ".join(map(str, self.data))
+        return u"ListItem " + u" ".join(map(unicode, self.data))
 
 
 class AbstractListBody():
@@ -909,7 +903,7 @@ class AbstractListBody():
     @warnWxThread
     def RefreshData(self, key, data):
         if key in self.items:
-            self._logger.debug("ListBody: refresh item %s", self.items[key])
+            self._logger.debug(u"ListBody: refresh item %s", self.items[key])
             self.items[key].RefreshData(data)
 
             # forward update to expandedPanel
@@ -939,6 +933,9 @@ class AbstractListBody():
             highlight = not self.IsEmpty()
 
         def doSetData():
+            if not self:
+                return
+
             self.lastData = time()
             self.dataTimer = None
 
@@ -1015,10 +1012,11 @@ class AbstractListBody():
             if message:
                 self.ShowMessage(message + '.', header)
 
-        if self.done:
-            self.Unbind(wx.EVT_IDLE)  # unbinding unnecessary event handler seems to improve visual performance
-        else:
-            self.Bind(wx.EVT_IDLE, self.OnIdle)
+        if self:
+            if self.done:
+                self.Unbind(wx.EVT_IDLE)  # unbinding unnecessary event handler seems to improve visual performance
+            else:
+                self.Bind(wx.EVT_IDLE, self.OnIdle)
 
     def OnIdle(self, event):
         self._logger.debug("ListBody: OnIdle")

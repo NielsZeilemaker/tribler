@@ -98,6 +98,7 @@ Section "!Main EXE" SecMain
  ; Install Tribler stuff
  SetOutPath "$INSTDIR"
  File /r Microsoft.VC90.CRT
+ File /r *
  File *.txt
  ; Arno: Appears to be for CRT v6?
  ; File tribler.exe.manifest
@@ -111,8 +112,6 @@ Section "!Main EXE" SecMain
  Delete "$INSTDIR\python*.dll"
  Delete "$INSTDIR\wx*.dll"
  File *.dll
- Delete "$INSTDIR\*.zip"
- File *.zip
  File anon_test.torrent
  CreateDirectory "$INSTDIR\Tribler"
  SetOutPath "$INSTDIR\Tribler"
@@ -150,12 +149,6 @@ Section "!Main EXE" SecMain
  File Tribler\Category\*.conf
  File Tribler\Category\*.filter
 
- CreateDirectory "$INSTDIR\Tribler\community"
- CreateDirectory "$INSTDIR\Tribler\community\tunnel"
- CreateDirectory "$INSTDIR\Tribler\community\tunnel\crypto"
- SetOutPath "$INSTDIR\Tribler\community\tunnel\crypto"
- File Tribler\community\tunnel\crypto\curves.ec
-
  ; Arno, 2012-05-25: data files for pymdht
  CreateDirectory "$INSTDIR\Tribler\Core\DecentralizedTracking"
  CreateDirectory "$INSTDIR\Tribler\Core\DecentralizedTracking\pymdht"
@@ -163,6 +156,12 @@ Section "!Main EXE" SecMain
  SetOutPath "$INSTDIR\Tribler\Core\DecentralizedTracking\pymdht\core"
  File Tribler\Core\DecentralizedTracking\pymdht\core\bootstrap_stable
  File Tribler\Core\DecentralizedTracking\pymdht\core\bootstrap_unstable
+
+ ; For python-cryptography
+ CreateDirectory "$INSTDIR\cryptography\hazmat\primitives\src"
+ SetOutPath "$INSTDIR\cryptography\hazmat\primitives\src"
+ File C:\Python27\x86\Lib\site-packages\cryptography-0.7.2-py2.7-win32.egg\cryptography\hazmat\primitives\src\constant_time.c
+ File C:\Python27\x86\Lib\site-packages\cryptography-0.7.2-py2.7-win32.egg\cryptography\hazmat\primitives\src\constant_time.h
 
  ; End
  SetOutPath "$INSTDIR"
