@@ -23,6 +23,9 @@ class InMemoryDB:
     def get(self, block_id):
         return self._hash_dict[block_id]
 
+    def get_keys(self):
+        return self._hash_dict.keys()
+
     def contains(self, block_id):
         return block_id in self._hash_dict
 

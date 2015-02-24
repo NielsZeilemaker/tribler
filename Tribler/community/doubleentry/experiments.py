@@ -1,4 +1,7 @@
 from Tribler.dispersy.crypto import ECCrypto
+# imports graph experiment
+import networkx as nx
+import matplotlib.pyplot as plot
 
 __author__ = 'norberhuis'
 """
@@ -37,3 +40,32 @@ class NumericalExample:
         f = open("signature", 'w')
         f.write(signature)
         f.close()
+
+
+class GraphDrawer:
+
+    def __init__(self, persistence):
+        self._persistence = persistence
+        # Create Directed Graph
+        self.graph = nx.DiGraph()
+        self.setup_graph()
+
+    def setup_graph(self):
+        # Get all keys
+        keys = self._persistence.get_keys()
+        # Every key is a node and iterate over each node
+        for key in keys:
+            self.graph.add_node(key)
+            # Add the edges
+            block = self._persistence.get(key).payload
+            requester_edge_tail = block.previous_hash_requester
+            responder_edge_tail = block.previous_hash_responder
+            self.graph.add_edge(key, requester_edge_tail)
+            self.graph.add_edge(key, responder_edge_tail)
+
+    def draw_graph(self):
+        nx.draw(self.graph)
+        plot.show(self.graph)
+
+
+

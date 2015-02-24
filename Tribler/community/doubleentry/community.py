@@ -32,7 +32,7 @@ class DoubleEntryCommunity(Community):
         self._ec = None
         self._public_key = None
 
-        self._persistence = None
+        self.persistence = None
 
     def initialize(self, a=None, b=None):
         super(DoubleEntryCommunity, self).initialize()
@@ -40,7 +40,7 @@ class DoubleEntryCommunity(Community):
     def set_ec(self, ec):
         self._ec = ec
         self._public_key = ECCrypto().key_to_bin(self._ec.pub())
-        self._persistence = InMemoryDB(self._public_key)
+        self.persistence = InMemoryDB(self._public_key)
 
     @classmethod
     def get_master_members(cls, dispersy):
@@ -104,7 +104,7 @@ class DoubleEntryCommunity(Community):
         meta = self.get_meta_message(SIGNATURE_REQUEST)
 
         timestamp = repr(time.time())
-        previous_hash_requester = self._persistence.previous_id
+        previous_hash_requester = self.persistence.previous_id
         public_key_requester = self._public_key
         signature = ECCrypto().create_signature(self._ec, timestamp)
 
@@ -121,7 +121,7 @@ class DoubleEntryCommunity(Community):
         """
         payload = signature_request.payload
         # Check if the request is not already processed.
-        return (not self._persistence.contains_signature(payload.signature_requester, payload.public_key_requester) and
+        return (not self.persistence.contains_signature(payload.signature_requester, payload.public_key_requester) and
                 # Check if the request is valid
                 self.validate_signature(payload.public_key_requester, payload.timestamp, payload.signature_requester))
 
@@ -176,7 +176,7 @@ class DoubleEntryCommunity(Community):
         signature_requester = signature_request.payload.signature_requester
         request = timestamp + "." + public_key_requester + "." + signature_requester
         # Create the personal part of the message.
-        previous_hash_responder = self._persistence.previous_id
+        previous_hash_responder = self.persistence.previous_id
         public_key_responder = ECCrypto().key_to_bin(self._ec.pub())
         # Sign the request.
         signature = ECCrypto().create_signature(self._ec, request)
@@ -232,7 +232,7 @@ class DoubleEntryCommunity(Community):
         """
         message_hash = self.hash_signature_response(message)
         self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))
-        self._persistence.add_block(message_hash, message)
+        self.persistence.add_block(message_hash, message)
 
     @staticmethod
     def hash_signature_response(message):
@@ -275,7 +275,7 @@ class DoubleEntryCommunity(Community):
 
     def toString(self):
         result = "Node:" + base64.encodestring(self._public_key[:5]) + "\n"
-        result += self._persistence.toString() + "\n"
+        result += self.persistence.toString() + "\n"
         return result
 
 class DoubleEntrySettings(object):

@@ -15,6 +15,7 @@ from Tribler.community.doubleentry.community import DoubleEntryCommunity
 from Tribler.community.doubleentry.community import DoubleEntrySettings
 
 from Tribler.community.doubleentry.experiments import NumericalExample
+from Tribler.community.doubleentry.experiments import GraphDrawer
 
 from twisted.internet.threads import blockingCallFromThread
 from twisted.internet.stdio import StandardIO
@@ -91,11 +92,19 @@ class DoubleEntry(object):
         """
         self.community.publish_signature_request_message()
 
-    def printCommunity(self):
+    def print_community(self):
         """
         Instruct the community to print out information.
         """
         print(self.community.toString())
+
+    def draw_community(self):
+        """
+        Instruct the community to draw the blockchain.
+        """
+        graph_drawer = GraphDrawer(self.community.persistence)
+        graph_drawer.draw_graph()
+
 
 class CommandHandler(LineReceiver):
     """
@@ -117,7 +126,9 @@ class CommandHandler(LineReceiver):
             experiment = NumericalExample(self.double_entry.get_community())
             experiment.perform_experiment()
         elif line == 'p':
-            self.double_entry.printCommunity()
+            self.double_entry.print_community()
+        elif line == 'g':
+            self.double_entry.draw_community()
 
         self.transport.write('>>> ')
 
