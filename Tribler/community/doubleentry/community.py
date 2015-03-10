@@ -222,7 +222,9 @@ class DoubleEntryCommunity(Community):
 
     def _on_signature_response(self, messages):
         for message in messages:
-            self.persist_signature_response(message)
+            # Check if the messages are not from ourselves.
+            if message.payload.public_key_responder != self._public_key:
+                self.persist_signature_response(message)
 
     def persist_signature_response(self, message):
         """
