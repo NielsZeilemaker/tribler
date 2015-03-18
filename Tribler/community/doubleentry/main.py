@@ -1,5 +1,5 @@
 """
-Python file to bootstrap a single DOubleEntry Community.
+Python file to bootstrap a single DoubleEntry Community.
 """
 import os
 import sys
@@ -79,8 +79,6 @@ class DoubleEntry(object):
             self._member = self.dispersy.get_new_member(u"NID_secp160k1")
             self.community = self.dispersy.define_auto_load(community, self._member,
                                                             (None, self.settings), load=True)[0]
-            self.community.set_ec(self._member.private_key)
-
         blockingCallFromThread(reactor, start_community)
 
     def get_community(self):
@@ -96,7 +94,7 @@ class DoubleEntry(object):
         """
         Instruct the community to print out information.
         """
-        print(self.community.toString())
+        print(self.community.to_string())
 
     def draw_community(self):
         """

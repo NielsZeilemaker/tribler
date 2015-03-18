@@ -52,12 +52,12 @@ class GraphDrawer:
 
     def setup_graph(self):
         # Get all keys
-        keys = self._persistence.get_keys()
+        keys = self._persistence.get_ids()
         # Every key is a node and iterate over each node
         for key in keys:
             self.graph.add_node(key)
             # Add the edges
-            block = self._persistence.get(key).payload
+            block = self._persistence.get(key)
             requester_edge_tail = block.previous_hash_requester
             responder_edge_tail = block.previous_hash_responder
             self.graph.add_edge(key, requester_edge_tail)
