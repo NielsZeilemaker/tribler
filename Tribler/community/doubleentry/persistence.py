@@ -16,6 +16,8 @@ def decode_db(string):
     """ Decodes a string in database encoding"""
     return base64.decodestring(string.encode('ascii', 'replace'))
 
+""" Path to the database location + dispersy._workingdirectory"""
+DATABASEPATH = path.join(u"sqlite", u"doubleentry.db")
 """ ID of the first block of the chain. """
 GENESIS_ID = "GENESIS_ID"
 """ Version to keep track if the db schema needs to be updated."""
@@ -41,6 +43,8 @@ INSERT INTO option(key, value) VALUES('previous_id', '""" + encode_db(GENESIS_ID
 cleanup = u"DELETE FROM double_entry;" \
           u"UPDATE `option` SET value = '" + encode_db(GENESIS_ID) + \
           u"' WHERE key == 'previous_id';"
+
+
 
 
 class Persistence:
@@ -166,14 +170,12 @@ class DoubleEntryDB(Database):
 
     def __init__(self, dispersy):
         self._dispersy = dispersy
-        super(DoubleEntryDB, self).__init__(path.join(dispersy.working_directory, u"sqlite", u"doubleentry.db"))
+        super(DoubleEntryDB, self).__init__(path.join(dispersy.working_directory, DATABASEPATH))
 
     def open(self):
-        self._dispersy.database.attach_commit_callback(self.commit)
         return super(DoubleEntryDB, self).open()
 
     def close(self):
-        self._dispersy.database.detach_commit_callback(self.commit)
         return super(DoubleEntryDB, self).close()
 
     def cleanup(self):
