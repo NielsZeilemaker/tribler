@@ -256,12 +256,10 @@ class DoubleEntryCommunity(Community):
         """
         # Check if the payload contains a valid public key
         if ECCrypto().is_valid_public_bin(public_key_binary):
-            # Convert the public key from the binary format to EC_Pub type
-            if ECCrypto().is_valid_public_bin(public_key_binary):
-                # Convert the public key from the binary format to EC_PUB instance
-                public_key = ECCrypto().key_from_public_bin(public_key_binary)
-                # Check the signature
-                return ECCrypto().is_valid_signature(public_key, payload, signature)
+            # Convert the public key from the binary format to EC_PUB instance
+            public_key = ECCrypto().key_from_public_bin(public_key_binary)
+            # Check the signature
+            return ECCrypto().is_valid_signature(public_key, payload, signature)
         else:
             # Invalid public key.
             return False
