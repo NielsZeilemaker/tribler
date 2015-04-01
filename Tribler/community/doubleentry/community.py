@@ -5,8 +5,8 @@ from hashlib import sha1
 
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.resolution import PublicResolution
-from Tribler.dispersy.distribution import FullSyncDistribution
-from Tribler.dispersy.destination import CommunityDestination
+from Tribler.dispersy.distribution import FullSyncDistribution, DirectDistribution
+from Tribler.dispersy.destination import CommunityDestination, CandidateDestination
 from Tribler.dispersy.community import Community
 from Tribler.dispersy.message import Message, DropMessage
 from Tribler.dispersy.crypto import ECCrypto
@@ -73,8 +73,8 @@ class DoubleEntryCommunity(Community):
             Message(self, SIGNATURE_RESPONSE,
                     MemberAuthentication(),
                     PublicResolution(),
-                    FullSyncDistribution(enable_sequence_number=False, synchronization_direction=u"DESC", priority=128),
-                    CommunityDestination(node_count=1),
+                    DirectDistribution(),
+                    CandidateDestination(),
                     SignatureResponsePayload(),
                     self._check_signature_response,
                     self._on_signature_response)]
@@ -149,6 +149,7 @@ class DoubleEntryCommunity(Community):
         Creates and sends out signature_response message for a signature_request message.
         The message is also locally persisted.
         :param signature_request: signature_request message that needs to be responded to.
+        :param candidate: the candidate that will receive the signature response message.
         """
         self._logger.info("Sending signature response.")
         message = self.create_signature_response_message(signature_request)
@@ -159,6 +160,7 @@ class DoubleEntryCommunity(Community):
         """
         Create a signature response message for a signature_request message.
         :param signature_request: signature_request message that needs to be responded to.
+        :param candidate: the candidate that will receive the signature response message.
         :return: Signature_response message ready for distribution.
         """
         meta = self.get_meta_message(SIGNATURE_RESPONSE)
@@ -177,6 +179,7 @@ class DoubleEntryCommunity(Community):
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
+                            destination=(signature_request.candidate,),
                             payload=(timestamp, previous_hash_requester, public_key_requester, signature_requester,
                                      previous_hash_responder, public_key_responder, signature))
         return message

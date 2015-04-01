@@ -14,6 +14,7 @@ from Tribler.community.doubleentry.persistence import DATABASEPATH
 
 from Tribler.dispersy.dispersydatabase import DispersyDatabase
 
+
 class TestPersistence(unittest.TestCase):
     """
     Tests the Persister for DoubleEntry community.
@@ -110,7 +111,6 @@ class TestBlock:
         self.signature_responder = crypto.create_signature(key_responder, self.timestamp)
         self.public_key_responder = crypto.key_to_bin(key_responder.pub())
 
-
     @property
     def id(self):
         return self.generate_hash()
@@ -123,7 +123,9 @@ class TestBlock:
         # Explicit way of building the data for the hash is used.
         # This because it is used to validate a test result in test_community
         # and it is easier to read for the programmer this way.
-        data = self.timestamp + "." + self.previous_hash_requester + "." + self.public_key_requester + "." + self.signature_requester + "." + self. previous_hash_responder + "." + self.public_key_responder + "." + self.signature_responder
+        data = (self.timestamp + "." + self.previous_hash_requester + "." + self.public_key_requester + "." +
+                self.signature_requester + "." + self. previous_hash_responder + "." + self.public_key_responder +
+                "." + self.signature_responder)
         return sha1(data).digest()
 
 

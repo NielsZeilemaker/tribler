@@ -5,6 +5,7 @@ from Tribler.dispersy.crypto import ECCrypto
 
 from Tribler.Test.community.doubleentry.test_persistence import TestBlock
 
+
 class TestDoubleEntryCommunity(unittest.TestCase):
     """
     Test class to test helper methods of the Double Entry Community.

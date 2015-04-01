@@ -45,8 +45,6 @@ cleanup = u"DELETE FROM double_entry;" \
           u"' WHERE key == 'previous_id';"
 
 
-
-
 class Persistence:
     """
     Persistence layer for the DoubleEntry Community.
@@ -172,11 +170,11 @@ class DoubleEntryDB(Database):
         self._dispersy = dispersy
         super(DoubleEntryDB, self).__init__(path.join(dispersy.working_directory, DATABASEPATH))
 
-    def open(self):
-        return super(DoubleEntryDB, self).open()
+    def open(self, initial_statements=True, prepare_visioning=True):
+        return super(DoubleEntryDB, self).open(initial_statements, prepare_visioning)
 
-    def close(self):
-        return super(DoubleEntryDB, self).close()
+    def close(self, commit=True):
+        return super(DoubleEntryDB, self).close(commit)
 
     def cleanup(self):
         self.executescript(cleanup)
