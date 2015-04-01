@@ -1,6 +1,7 @@
 import unittest
 import os
 import time
+import random
 
 from hashlib import sha1
 from os import path
@@ -88,6 +89,10 @@ class TestPersistence(unittest.TestCase):
 
 
 class TestBlock:
+    """
+    Test Class that simulates a block message used in DoubleEntry.
+    Also used in other test files for DoubleEntry.
+    """
 
     def __init__(self):
         self._timestamp = time.time()
@@ -95,28 +100,31 @@ class TestBlock:
         key_requester = crypto.generate_key(u"very-low")
         key_responder = crypto.generate_key(u"very-low")
 
-
+        # A random hash is generated for the previous hash. It is only used to test if a hash can be persisted.
+        self.previous_hash_requester = sha1(repr(random.randint(0, 100000))).digest()
         self.signature_requester = crypto.create_signature(key_requester, self.timestamp)
         self.public_key_requester = crypto.key_to_bin(key_requester.pub())
 
-
+        # A random hash is generated for the previous hash. It is only used to test if a hash can be persisted.
+        self.previous_hash_responder = sha1(repr(random.randint(100001, 200000))).digest()
         self.signature_responder = crypto.create_signature(key_responder, self.timestamp)
         self.public_key_responder = crypto.key_to_bin(key_responder.pub())
 
-        self.previous_hash_requester = self.generate_hash(self._timestamp-5000)
-        self.previous_hash_responder = self.generate_hash(self._timestamp-5000)
 
     @property
     def id(self):
-        return self.generate_hash(self._timestamp)
+        return self.generate_hash()
 
     @property
     def timestamp(self):
         return repr(self._timestamp)
 
-    def generate_hash(self, timestamp):
-        return sha1(repr(timestamp) + "." + self.signature_requester + "." + self.public_key_requester + "." +
-                    self.signature_responder + "." + self.public_key_responder).digest()
+    def generate_hash(self):
+        # Explicit way of building the data for the hash is used.
+        # This because it is used to validate a test result in test_community
+        # and it is easier to read for the programmer this way.
+        data = self.timestamp + "." + self.previous_hash_requester + "." + self.public_key_requester + "." + self.signature_requester + "." + self. previous_hash_responder + "." + self.public_key_responder + "." + self.signature_responder
+        return sha1(data).digest()
 
 
 class TestDispersy:

@@ -3,6 +3,7 @@ import unittest
 from Tribler.community.doubleentry.community import DoubleEntryCommunity
 from Tribler.dispersy.crypto import ECCrypto
 
+from Tribler.Test.community.doubleentry.test_persistence import TestBlock
 
 class TestDoubleEntryCommunity(unittest.TestCase):
     """
@@ -45,6 +46,23 @@ class TestDoubleEntryCommunity(unittest.TestCase):
         result = DoubleEntryCommunity.validate_signature(private_key_format, payload, signature)
         # Assert
         assert not result
+
+    def test_hash_signature_response(self):
+        # Arrange
+        message = TestMessage(TestBlock())
+        # Act
+        result = DoubleEntryCommunity.hash_signature_response(message)
+        # Assert
+        self.assertEqual(result, message.payload.id)
+
+
+class TestMessage:
+    """
+    Test Message that simulates a message used in the DoubleEntry community.
+    """
+
+    def __init__(self, payload):
+        self.payload = payload
 
 
 

@@ -238,9 +238,11 @@ class DoubleEntryCommunity(Community):
         :return: Hash
         """
         payload = message.payload
-        # Prepare the data to be signed.
-        data = payload.timestamp + "." + payload.public_key_requester + "." + payload.signature_requester + "." + \
-            payload.public_key_responder + "." + payload.signature_responder
+        # Prepare the data to be signed separated by '.'
+        data = (payload.timestamp,
+                payload.previous_hash_requester, payload.public_key_requester, payload.signature_requester,
+                payload.previous_hash_responder, payload.public_key_responder, payload.signature_responder)
+        data = ".".join(data)
         # Create the hash using SHA1.
         return sha1(data).digest()
 
@@ -266,11 +268,6 @@ class DoubleEntryCommunity(Community):
 
     def get_key(self):
         return self._ec
-
-    def to_string(self):
-        result = "Node:" + base64.encodestring(self._public_key[:5]) + "\n"
-        result += self.persistence.to_string() + "\n"
-        return result
 
 
 class DoubleEntrySettings(object):

@@ -90,12 +90,6 @@ class DoubleEntry(object):
         """
         self.community.publish_signature_request_message()
 
-    def print_community(self):
-        """
-        Instruct the community to print out information.
-        """
-        print(self.community.to_string())
-
     def draw_community(self):
         """
         Instruct the community to draw the blockchain.
@@ -123,8 +117,6 @@ class CommandHandler(LineReceiver):
         elif line == 'n':
             experiment = NumericalExample(self.double_entry.get_community())
             experiment.perform_experiment()
-        elif line == 'p':
-            self.double_entry.print_community()
         elif line == 'g':
             self.double_entry.draw_community()
 
