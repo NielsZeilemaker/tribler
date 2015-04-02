@@ -4,13 +4,9 @@ import sys
 import logging
 
 from Tribler.Category.Category import Category
-from Tribler.Core.Search.Bundler import Bundler
-from Tribler.Core.simpledefs import NTFY_BUNDLERPREFERENCE
-from Tribler.Core.CacheDB.sqlitecachedb import forceDBThread
 
 from Tribler.community.channel.community import ChannelCommunity
 
-from Tribler.Main.Utility.GuiDBHandler import startWorker
 from Tribler.Main.Utility.GuiDBTuples import Channel, Playlist
 from Tribler.Main.vwxGUI import SEPARATOR_GREY, FILTER_GREY, warnWxThread
 from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
@@ -122,7 +118,14 @@ class ListHeader(wx.Panel):
             down, up, empty = ListHeaderIcon.getInstance().getBitmaps(self, self.GetBackgroundColour())
             for i in xrange(len(columns)):
                 if columns[i].get('name', '') != '':
-                    label = LinkText(parent, columns[i]['name'], fonts=[None, selectedfont], style=columns[i].get('style', 0) | wx.ST_NO_AUTORESIZE, parentsizer=sizer)
+                    label = LinkText(
+                        parent,
+                        columns[i]['name'],
+                        fonts=[None,
+                               selectedfont],
+                        style=columns[i].get('style',
+                                             0) | wx.ST_NO_AUTORESIZE,
+                        parentsizer=sizer)
                     label.SetToolTipString('Click to sort table by %s.' % columns[i]['name'])
                     label.SetBackgroundColour(self.GetBackgroundColour())
                     label.column = i
@@ -161,7 +164,11 @@ class ListHeader(wx.Panel):
                         if remainingWidth > 0:
                             sizer.AddSpacer((remainingWidth, 1))
                         else:
-                            self._logger.info("LIST_HEADER: specified width is too small %s %s %s", columns[i]['name'], columns[i]['width'], remainingWidth)
+                            self._logger.info(
+                                "LIST_HEADER: specified width is too small %s %s %s",
+                                columns[i]['name'],
+                                columns[i]['width'],
+                                remainingWidth)
                             label.SetSize((label.GetBestSize()[0] + remainingWidth, -1))
 
                     self.columnHeaders.append(label)
@@ -280,7 +287,16 @@ class ListHeader(wx.Panel):
 
 class TitleHeader(ListHeader):
 
-    def __init__(self, parent, parent_list, columns, font_increment=2, fontweight=wx.FONTWEIGHT_BOLD, radius=0, spacers=[3, 3]):
+    def __init__(
+        self,
+        parent,
+     parent_list,
+     columns,
+     font_increment=2,
+     fontweight=wx.FONTWEIGHT_BOLD,
+     radius=0,
+     spacers=[3,
+              3]):
         self.font_increment = font_increment
         self.fontweight = fontweight
 
@@ -523,26 +539,22 @@ class BaseFilter(wx.Panel):
 
 class TorrentFilter(BaseFilter):
 
-    def __init__(self, parent, parent_list, spacers=[10, 3], show_bundle=False):
+    def __init__(self, parent, parent_list, spacers=[10, 3]):
         self.guiutility = GUIUtility.getInstance()
         self.torrentsearch_manager = self.guiutility.torrentsearch_manager
-
-        self.bundlestates = [Bundler.ALG_MAGIC, Bundler.ALG_NAME, Bundler.ALG_NUMBERS, Bundler.ALG_SIZE, Bundler.ALG_OFF]
-        self.bundlestates_str = {Bundler.ALG_NAME: 'Name',
-                                 Bundler.ALG_NUMBERS: 'Numbers',
-                                 Bundler.ALG_SIZE: 'Size',
-                                 Bundler.ALG_MAGIC: 'Magic',
-                                 Bundler.ALG_OFF: 'Off'}
-        self.bundletexts = []
-        self.bundle_db = self.guiutility.utility.session.open_dbhandler(NTFY_BUNDLERPREFERENCE)
 
         self.slider_minmax = (0, 0)
         self.slider_positions = (0, 0)
         self.conversion_factor = 1048576.0
-        self.show_bundle = show_bundle
-        self.SetBundleState(None)
 
-        BaseFilter.__init__(self, parent, parent_list, ColumnsManager.getInstance().getColumns(TorrentListItem), spacers)
+        BaseFilter.__init__(
+            self,
+            parent,
+            parent_list,
+            ColumnsManager.getInstance(
+            ).getColumns(
+                TorrentListItem),
+             spacers)
 
     def GetFilterPanel(self, parent):
         panel = wx.Panel(parent)
@@ -556,11 +568,6 @@ class TorrentFilter(BaseFilter):
         self.sortby_icon = wx.StaticBitmap(panel, -1, self.icon_right)
         self.sortby = LinkStaticText(panel, 'Sort by', None, font_colour=wx.BLACK)
         self.sortby.Bind(wx.EVT_LEFT_UP, self.OnPopupSort)
-
-        if self.show_bundle:
-            self.bundleby_icon = wx.StaticBitmap(panel, -1, self.icon_right)
-            self.bundleby = LinkStaticText(panel, 'Bundle by', None, font_colour=wx.BLACK)
-            self.bundleby.Bind(wx.EVT_LEFT_UP, self.OnPopupBundle)
 
         self.filetype_icon = wx.StaticBitmap(panel, -1, self.icon_right)
         self.filetype = LinkStaticText(panel, 'File type', None, font_colour=wx.BLACK)
@@ -583,10 +590,6 @@ class TorrentFilter(BaseFilter):
         hSizer.Add(self.sortby_icon, 0, wx.CENTER | wx.RIGHT, 3)
         hSizer.Add(self.sortby, 0, wx.CENTER)
         hSizer.AddSpacer((45, -1))
-        if self.show_bundle:
-            hSizer.Add(self.bundleby_icon, 0, wx.CENTER | wx.RIGHT, 3)
-            hSizer.Add(self.bundleby, 0, wx.CENTER)
-            hSizer.AddSpacer((45, -1))
         hSizer.Add(self.filetype_icon, 0, wx.CENTER | wx.RIGHT, 3)
         hSizer.Add(self.filetype, 0, wx.CENTER)
         hSizer.AddSpacer((45, -1))
@@ -616,7 +619,14 @@ class TorrentFilter(BaseFilter):
                 sortAsc = column.get('sortAsc', False)
                 itemid = wx.NewId()
                 menu.AppendRadioItem(itemid, column['name'])
-                menu.Bind(wx.EVT_MENU, lambda x, index=index, sortAsc=sortAsc: self.parent_list.OnSort(index, sortAsc), id=itemid)
+                menu.Bind(
+                    wx.EVT_MENU,
+                    lambda x,
+                    index=index,
+                    sortAsc=sortAsc: self.parent_list.OnSort(
+                        index,
+                        sortAsc),
+                    id=itemid)
                 menu.Check(itemid, sortcolumn == index)
 
         if len(self.columns) > 0:
@@ -636,20 +646,6 @@ class TorrentFilter(BaseFilter):
         menu.Destroy()
         self.Layout()
 
-    def OnPopupBundle(self, event):
-        menu = wx.Menu()
-        for state, state_str in self.bundlestates_str.iteritems():
-            itemid = wx.NewId()
-            menu.AppendRadioItem(itemid, state_str)
-            menu.Bind(wx.EVT_MENU, lambda x, state=state: self.Rebundle(state), id=itemid)
-            menu.Check(itemid, self.bundlestate == state)
-
-        ctrl = self.bundleby_icon
-        pos = wx.Point(ctrl.GetPosition().x, self.GetPosition().y + self.filter_panel.GetSize().y)
-        self.PopupMenu(menu, pos)
-        menu.Destroy()
-        self.Layout()
-
     def OnPopupFileType(self, event):
         menu = wx.Menu()
         itemid = wx.NewId()
@@ -661,7 +657,12 @@ class TorrentFilter(BaseFilter):
                 itemid = wx.NewId()
                 menu.AppendRadioItem(itemid, filetype)
                 menu.Bind(wx.EVT_MENU, lambda x, filetype=filetype: self.CategoryFilter(filetype), id=itemid)
-                menu.Check(itemid, bool(self.parent_list.categoryfilter) and (filetype.lower() in self.parent_list.categoryfilter))
+                menu.Check(
+                    itemid,
+                    bool(
+                        self.parent_list.categoryfilter) and (
+                            filetype.lower(
+                            ) in self.parent_list.categoryfilter))
 
         ctrl = self.filetype_icon
         pos = wx.Point(ctrl.GetPosition().x, self.GetPosition().y + self.filter_panel.GetSize().y)
@@ -749,46 +750,6 @@ class TorrentFilter(BaseFilter):
             max_val = min(self.slider_positions[1], length_max)
             self.filesize.SetCurrentValues(min_val, max_val)
 
-    def Rebundle(self, newstate):
-        def db_callback():
-            self.SetBundleState(newstate)
-
-            keywords = self.torrentsearch_manager.getSearchKeywords()[0]
-            self.bundle_db.storePreference(keywords, newstate)
-
-        startWorker(None, db_callback)
-
-    @forceDBThread
-    def SetBundleState(self, newstate, refresh=True):
-        if newstate is None:
-            auto_guess = self.guiutility.utility.read_config('use_bundle_magic')
-
-            newstate = Bundler.ALG_OFF  # default
-            keywords = self.torrentsearch_manager.getSearchKeywords()[0]
-            if keywords != '':
-                try:
-                    stored_state = self.bundle_db.getPreference(keywords)
-                except:
-                    # if db interaction fails, ignore
-                    stored_state = None
-
-                local_override = stored_state is not None
-
-                if local_override:
-                    newstate = stored_state
-
-                elif auto_guess:
-                    newstate = Bundler.ALG_MAGIC
-
-        self.bundlestate = newstate
-        self.selected_bundle_mode = None
-
-        self.torrentsearch_manager.setBundleMode(newstate, refresh)
-
-    def SetSelectedBundleMode(self, selected_bundle_mode):
-        if self.bundlestate == Bundler.ALG_MAGIC:
-            self.selected_bundle_mode = selected_bundle_mode
-
     def AddButton(self, btn_label, btn_handler):
         num_children = len(self.filter_sizer.GetChildren())
         if num_children < 2:
@@ -847,7 +808,14 @@ class ChannelFilter(BaseFilter):
         self.channellist_manager = parent_list.GetManager()
         self.channel_categories = ["All", "Popular", "New", "Updated", "Mine"]
 
-        BaseFilter.__init__(self, parent, parent_list, ColumnsManager.getInstance().getColumns(ChannelListItem), spacers)
+        BaseFilter.__init__(
+            self,
+            parent,
+            parent_list,
+            ColumnsManager.getInstance(
+            ).getColumns(
+                ChannelListItem),
+             spacers)
 
     def GetFilterPanel(self, parent):
         panel = wx.Panel(parent)
@@ -903,7 +871,14 @@ class ChannelFilter(BaseFilter):
                 sortcolumn = index if (sortcolumn == -1 and sortDef) else sortcolumn
                 itemid = wx.NewId()
                 menu.AppendRadioItem(itemid, column['name'])
-                menu.Bind(wx.EVT_MENU, lambda x, index=index, sortAsc=sortAsc: self.parent_list.OnSort(index, sortAsc), id=itemid)
+                menu.Bind(
+                    wx.EVT_MENU,
+                    lambda x,
+                    index=index,
+                    sortAsc=sortAsc: self.parent_list.OnSort(
+                        index,
+                        sortAsc),
+                    id=itemid)
                 menu.Check(itemid, sortcolumn == index)
 
         if len(self.columns) > 0:
@@ -993,7 +968,14 @@ class DownloadFilter(BaseFilter):
         self.slider_positions = (0, 0)
         self.conversion_factor = 1048576.0
 
-        BaseFilter.__init__(self, parent, parent_list, ColumnsManager.getInstance().getColumns(LibraryListItem), spacers)
+        BaseFilter.__init__(
+            self,
+            parent,
+            parent_list,
+            ColumnsManager.getInstance(
+            ).getColumns(
+                LibraryListItem),
+             spacers)
 
     def GetFilterPanel(self, parent):
         panel = wx.Panel(parent)
@@ -1075,7 +1057,14 @@ class DownloadFilter(BaseFilter):
                 sortcolumn = index if (sortcolumn == -1 and sortDef) else sortcolumn
                 itemid = wx.NewId()
                 menu.AppendRadioItem(itemid, column['name'] if column['name'] else 'Progress')
-                menu.Bind(wx.EVT_MENU, lambda x, index=index, sortAsc=sortAsc: self.parent_list.OnSort(index, sortAsc), id=itemid)
+                menu.Bind(
+                    wx.EVT_MENU,
+                    lambda x,
+                    index=index,
+                    sortAsc=sortAsc: self.parent_list.OnSort(
+                        index,
+                        sortAsc),
+                    id=itemid)
                 menu.Check(itemid, sortcolumn == index)
 
         if len(self.columns) > 0:
@@ -1315,7 +1304,14 @@ class PlaylistHeader(ListItemHeader):
             tag.Bind(wx.EVT_LEFT_UP, lambda evt: self.guiutility.showChannel(playlist.channel))
             new_item.titleSizer.Insert(0, tag, 0, wx.ALIGN_CENTER_VERTICAL | wx.TOP, 2)
             new_item.titleSizer.Insert(1, (5, -1))
-            new_item.titleSizer.Insert(2, wx.StaticBitmap(new_item, -1, self.icon_right), 0, wx.ALIGN_CENTER_VERTICAL | wx.TOP, 2)
+            new_item.titleSizer.Insert(
+                2,
+                wx.StaticBitmap(new_item,
+                                -1,
+                                self.icon_right),
+                0,
+                wx.ALIGN_CENTER_VERTICAL | wx.TOP,
+                2)
             new_item.titleSizer.Insert(3, (5, -1))
             new_item.buttonSizer.Clear(deleteWindows=True)
 

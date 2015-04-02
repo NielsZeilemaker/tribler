@@ -26,11 +26,11 @@ import copy
 from Tribler.Category.Category import Category
 
 from Tribler.Core.version import version_id
-from Tribler.Core.simpledefs import (NTFY_MYPREFERENCES, NTFY_ACT_NEW_VERSION, NTFY_ACT_NONE,
-                                     NTFY_ACT_ACTIVE, NTFY_ACT_UPNP, NTFY_ACT_REACHABLE, NTFY_ACT_MEET,
-                                     NTFY_ACT_GET_EXT_IP_FROM_PEERS, NTFY_ACT_GOT_METADATA, NTFY_ACT_RECOMMEND,
-                                     NTFY_ACT_DISK_FULL, DLSTATUS_ALLOCATING_DISKSPACE, DLSTATUS_HASHCHECKING,
-                                     DLSTATUS_WAITING4HASHCHECK, DOWNLOAD)
+from Tribler.Core.simpledefs import (NTFY_ACT_NEW_VERSION, NTFY_ACT_NONE, NTFY_ACT_ACTIVE, NTFY_ACT_UPNP,
+                                     NTFY_ACT_REACHABLE, NTFY_ACT_MEET, NTFY_ACT_GET_EXT_IP_FROM_PEERS,
+                                     NTFY_ACT_GOT_METADATA, NTFY_ACT_RECOMMEND, NTFY_ACT_DISK_FULL,
+                                     DLSTATUS_ALLOCATING_DISKSPACE, DLSTATUS_HASHCHECKING, DLSTATUS_WAITING4HASHCHECK,
+                                     DOWNLOAD)
 from Tribler.Core.exceptions import DuplicateDownloadException
 from Tribler.Core.TorrentDef import TorrentDef, TorrentDefNoMetainfo
 from Tribler.Core.Utilities.utilities import parse_magnetlink, fix_torrent
@@ -50,7 +50,7 @@ from Tribler.Main.vwxGUI.list import SearchList, ChannelList, LibraryList, Activ
 from Tribler.Main.vwxGUI.list_details import (SearchInfoPanel, ChannelInfoPanel, LibraryInfoPanel, PlaylistInfoPanel,
                                               SelectedchannelInfoPanel, TorrentDetails, LibraryDetails, ChannelDetails,
                                               PlaylistDetails)
-from Tribler.Main.vwxGUI.TopSearchPanel import TopSearchPanel, TopSearchPanelStub
+from Tribler.Main.vwxGUI.TopSearchPanel import TopSearchPanel
 from Tribler.Main.vwxGUI.home import Home, Stats, NetworkGraphPanel
 from Tribler.Main.vwxGUI.channel import SelectedChannelList, Playlist, ManageChannel
 from Tribler.Main.vwxGUI.SRstatusbar import SRstatusbar
@@ -93,7 +93,9 @@ class FileDropTarget(wx.FileDropTarget):
                         break
 
                 if not found:
-                    dlg = wx.FileDialog(None, "Tribler needs a .torrent file to start seeding, please select the associated .torrent file.", wildcard="torrent (*.torrent)|*.torrent", style=wx.FD_OPEN)
+                    dlg = wx.FileDialog(
+                        None, "Tribler needs a .torrent file to start seeding, please select the associated .torrent file.",
+                                        wildcard="torrent (*.torrent)|*.torrent", style=wx.FD_OPEN)
                     if dlg.ShowModal() == wx.ID_OK:
                         filename = dlg.GetPath()
 
@@ -103,11 +105,11 @@ class FileDropTarget(wx.FileDropTarget):
                 if not found:
                     break
             try:
-                self.frame.startDownload(filename, destdir=destdir, fixtorrent=True)
+                self.frame.startDownload(filename, destdir=destdir)
             except IOError:
                 dlg = wx.MessageDialog(None,
-                    "File not found or cannot be accessed.",
-                    "Tribler Warning", wx.OK | wx.ICON_ERROR)
+                                       "File not found or cannot be accessed.",
+                                       "Tribler Warning", wx.OK | wx.ICON_ERROR)
                 dlg.ShowModal()
                 dlg.Destroy()
         return True
@@ -115,7 +117,7 @@ class FileDropTarget(wx.FileDropTarget):
 
 class MainFrame(wx.Frame):
 
-    def __init__(self, parent, channelonly, internalvideo, progress):
+    def __init__(self, parent, internalvideo, progress):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         self._logger.info('GUI started')
@@ -163,93 +165,78 @@ class MainFrame(wx.Frame):
 
         # Create all components
         progress('Creating panels')
-        if not channelonly:
-            self.actlist = ActivitiesList(self)
-            self.top_bg = TopSearchPanel(self)
-            self.home = Home(self)
 
-            self.splitter = wx.SplitterWindow(self, style=wx.SP_NOBORDER)
-            self.splitter.SetMinimumPaneSize(1)
-            self.splitter.SetForegroundColour(self.GetForegroundColour())
-            self.splitter_top_window = wx.Panel(self.splitter, style=wx.NO_BORDER)
-            self.splitter_top_window.SetForegroundColour(self.GetForegroundColour())
-            self.splitter_top = wx.BoxSizer(wx.HORIZONTAL)
-            self.splitter_top_window.SetSizer(self.splitter_top)
-            self.splitter_bottom_window = wx.Panel(self.splitter)
-            self.splitter_bottom_window.SetMinSize((-1, 25))
-            self.splitter_bottom_window.SetForegroundColour(self.GetForegroundColour())
-            self.splitter_bottom_window.OnChange = lambda: self.splitter_bottom.Layout()
-            self.splitter_bottom_window.parent_list = self.splitter_bottom_window
+        self.actlist = ActivitiesList(self)
+        self.top_bg = TopSearchPanel(self)
+        self.home = Home(self)
 
-            self.networkgraph = NetworkGraphPanel(self)
-            self.networkgraph.Show(False)
-            self.searchlist = SearchList(self.splitter_top_window)
-            self.searchlist.Show(False)
-            self.librarylist = LibraryList(self.splitter_top_window)
-            self.librarylist.Show(False)
-            self.channellist = ChannelList(self.splitter_top_window)
-            self.channellist.Show(False)
-            self.selectedchannellist = SelectedChannelList(self.splitter_top_window)
-            self.selectedchannellist.Show(False)
-            self.playlist = Playlist(self.splitter_top_window)
-            self.playlist.Show(False)
+        self.splitter = wx.SplitterWindow(self, style=wx.SP_NOBORDER)
+        self.splitter.SetMinimumPaneSize(1)
+        self.splitter.SetForegroundColour(self.GetForegroundColour())
+        self.splitter_top_window = wx.Panel(self.splitter, style=wx.NO_BORDER)
+        self.splitter_top_window.SetForegroundColour(self.GetForegroundColour())
+        self.splitter_top = wx.BoxSizer(wx.HORIZONTAL)
+        self.splitter_top_window.SetSizer(self.splitter_top)
+        self.splitter_bottom_window = wx.Panel(self.splitter)
+        self.splitter_bottom_window.SetMinSize((-1, 25))
+        self.splitter_bottom_window.SetForegroundColour(self.GetForegroundColour())
+        self.splitter_bottom_window.OnChange = lambda: self.splitter_bottom.Layout()
+        self.splitter_bottom_window.parent_list = self.splitter_bottom_window
 
-            # Populate the bottom window
-            self.splitter_bottom = wx.BoxSizer(wx.HORIZONTAL)
-            self.torrentdetailspanel = TorrentDetails(self.splitter_bottom_window)
-            self.torrentdetailspanel.Show(False)
-            self.librarydetailspanel = LibraryDetails(self.splitter_bottom_window)
-            self.librarydetailspanel.Show(False)
-            self.channeldetailspanel = ChannelDetails(self.splitter_bottom_window)
-            self.channeldetailspanel.Show(False)
-            self.playlistdetailspanel = PlaylistDetails(self.splitter_bottom_window)
-            self.playlistdetailspanel.Show(False)
-            self.searchinfopanel = SearchInfoPanel(self.splitter_bottom_window)
-            self.searchinfopanel.Show(False)
-            self.channelinfopanel = ChannelInfoPanel(self.splitter_bottom_window)
-            self.channelinfopanel.Show(False)
-            self.libraryinfopanel = LibraryInfoPanel(self.splitter_bottom_window)
-            self.libraryinfopanel.Show(False)
-            self.playlistinfopanel = PlaylistInfoPanel(self.splitter_bottom_window)
-            self.playlistinfopanel.Show(False)
-            self.selectedchannelinfopanel = SelectedchannelInfoPanel(self.splitter_bottom_window)
-            self.selectedchannelinfopanel.Show(False)
-            self.splitter_bottom.Add(self.torrentdetailspanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.librarydetailspanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.channeldetailspanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.playlistdetailspanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.searchinfopanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.channelinfopanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.libraryinfopanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.playlistinfopanel, 1, wx.EXPAND)
-            self.splitter_bottom.Add(self.selectedchannelinfopanel, 1, wx.EXPAND)
-            self.splitter_bottom_window.SetSizer(self.splitter_bottom)
+        self.networkgraph = NetworkGraphPanel(self)
+        self.networkgraph.Show(False)
+        self.searchlist = SearchList(self.splitter_top_window)
+        self.searchlist.Show(False)
+        self.librarylist = LibraryList(self.splitter_top_window)
+        self.librarylist.Show(False)
+        self.channellist = ChannelList(self.splitter_top_window)
+        self.channellist.Show(False)
+        self.selectedchannellist = SelectedChannelList(self.splitter_top_window)
+        self.selectedchannellist.Show(False)
+        self.playlist = Playlist(self.splitter_top_window)
+        self.playlist.Show(False)
 
-            self.splitter.SetSashGravity(0.8)
-            self.splitter.SplitHorizontally(self.splitter_top_window, self.splitter_bottom_window, sashpos)
-            self.splitter.Show(False)
+        # Populate the bottom window
+        self.splitter_bottom = wx.BoxSizer(wx.HORIZONTAL)
+        self.torrentdetailspanel = TorrentDetails(self.splitter_bottom_window)
+        self.torrentdetailspanel.Show(False)
+        self.librarydetailspanel = LibraryDetails(self.splitter_bottom_window)
+        self.librarydetailspanel.Show(False)
+        self.channeldetailspanel = ChannelDetails(self.splitter_bottom_window)
+        self.channeldetailspanel.Show(False)
+        self.playlistdetailspanel = PlaylistDetails(self.splitter_bottom_window)
+        self.playlistdetailspanel.Show(False)
+        self.searchinfopanel = SearchInfoPanel(self.splitter_bottom_window)
+        self.searchinfopanel.Show(False)
+        self.channelinfopanel = ChannelInfoPanel(self.splitter_bottom_window)
+        self.channelinfopanel.Show(False)
+        self.libraryinfopanel = LibraryInfoPanel(self.splitter_bottom_window)
+        self.libraryinfopanel.Show(False)
+        self.playlistinfopanel = PlaylistInfoPanel(self.splitter_bottom_window)
+        self.playlistinfopanel.Show(False)
+        self.selectedchannelinfopanel = SelectedchannelInfoPanel(self.splitter_bottom_window)
+        self.selectedchannelinfopanel.Show(False)
+        self.splitter_bottom.Add(self.torrentdetailspanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.librarydetailspanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.channeldetailspanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.playlistdetailspanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.searchinfopanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.channelinfopanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.libraryinfopanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.playlistinfopanel, 1, wx.EXPAND)
+        self.splitter_bottom.Add(self.selectedchannelinfopanel, 1, wx.EXPAND)
+        self.splitter_bottom_window.SetSizer(self.splitter_bottom)
 
-            # Reset the sash position after the splitter has been made visible
-            def OnShowSplitter(event):
-                wx.CallAfter(self.splitter.SetSashPosition, sashpos)
-                self.splitter.Unbind(wx.EVT_SHOW)
-                event.Skip()
-            self.splitter.Bind(wx.EVT_SHOW, OnShowSplitter)
+        self.splitter.SetSashGravity(0.8)
+        self.splitter.SplitHorizontally(self.splitter_top_window, self.splitter_bottom_window, sashpos)
+        self.splitter.Show(False)
 
-        else:
-            self.actlist = None
-            self.top_bg = None
-
-            self.guiUtility.guiPage = 'selectedchannel'
-            self.home = None
-            self.searchlist = None
-            self.librarylist = LibraryList(self)
-            self.librarylist.Show(False)
-            self.channellist = None
-            self.selectedchannellist = SelectedChannelList(self)
-            self.selectedchannellist.Show(True)
-            self.playlist = Playlist(self)
-            self.playlist.Show(False)
+        # Reset the sash position after the splitter has been made visible
+        def OnShowSplitter(event):
+            wx.CallAfter(self.splitter.SetSashPosition, sashpos)
+            self.splitter.Unbind(wx.EVT_SHOW)
+            event.Skip()
+        self.splitter.Bind(wx.EVT_SHOW, OnShowSplitter)
 
         self.stats = Stats(self)
         self.stats.Show(False)
@@ -258,29 +245,22 @@ class MainFrame(wx.Frame):
 
         progress('Positioning')
 
-        if not channelonly:
-            # position all elements
-            vSizer = wx.BoxSizer(wx.VERTICAL)
+        # position all elements
+        vSizer = wx.BoxSizer(wx.VERTICAL)
 
-            vSizer.Add(self.top_bg, 0, wx.EXPAND)
+        vSizer.Add(self.top_bg, 0, wx.EXPAND)
 
-            hSizer = wx.BoxSizer(wx.HORIZONTAL)
-            vSizer.Add(hSizer, 1, wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        vSizer.Add(hSizer, 1, wx.EXPAND)
 
-            hSizer.Add(self.actlist, 0, wx.EXPAND)
-            separator = wx.Panel(self, size=(1, -1))
-            separator.SetBackgroundColour(SEPARATOR_GREY)
-            hSizer.Add(separator, 0, wx.EXPAND)
-            hSizer.Add(self.home, 1, wx.EXPAND)
-            hSizer.Add(self.stats, 1, wx.EXPAND)
-            hSizer.Add(self.networkgraph, 1, wx.EXPAND)
-            hSizer.Add(self.splitter, 1, wx.EXPAND)
-        else:
-            vSizer = wx.BoxSizer(wx.VERTICAL)
-            hSizer = wx.BoxSizer(wx.HORIZONTAL)
-            vSizer.Add(hSizer, 1, wx.EXPAND | wx.ALL, 5)
-
-            self.top_bg = TopSearchPanelStub()
+        hSizer.Add(self.actlist, 0, wx.EXPAND)
+        separator = wx.Panel(self, size=(1, -1))
+        separator.SetBackgroundColour(SEPARATOR_GREY)
+        hSizer.Add(separator, 0, wx.EXPAND)
+        hSizer.Add(self.home, 1, wx.EXPAND)
+        hSizer.Add(self.stats, 1, wx.EXPAND)
+        hSizer.Add(self.networkgraph, 1, wx.EXPAND)
+        hSizer.Add(self.splitter, 1, wx.EXPAND)
 
         hSizer.Add(self.managechannel, 1, wx.EXPAND)
 
@@ -290,29 +270,23 @@ class MainFrame(wx.Frame):
         self.SetSizer(vSizer)
 
         # set sizes
-        if not channelonly:
-            self.top_bg.SetMinSize((-1, 45))
-            self.actlist.SetMinSize((200, -1))
+        self.top_bg.SetMinSize((-1, 45))
+        self.actlist.SetMinSize((200, -1))
 
         self.SRstatusbar = SRstatusbar(self)
         self.SetStatusBar(self.SRstatusbar)
 
         def preload_data():
-            if not channelonly:
-                self.guiUtility.showChannelCategory('All', False)
+            self.guiUtility.showChannelCategory('All', False)
             self.guiUtility.showLibrary(False)
         startWorker(None, preload_data, delay=1.5, workerType="guiTaskQueue")
-
-        if channelonly:
-            self.guiUtility.showChannelFromDispCid(channelonly)
-            if internalvideo:
-                self.guiUtility.ShowPlayer()
 
         if sys.platform != 'darwin':
             dragdroplist = FileDropTarget(self)
             self.SetDropTarget(dragdroplist)
         try:
-            self.SetIcon(wx.Icon(os.path.join(self.utility.getPath(), 'Tribler', 'Main', 'vwxGUI', 'images', 'tribler.ico'), wx.BITMAP_TYPE_ICO))
+            self.SetIcon(
+                wx.Icon(os.path.join(self.utility.getPath(), 'Tribler', 'Main', 'vwxGUI', 'images', 'tribler.ico'), wx.BITMAP_TYPE_ICO))
         except:
             pass
 
@@ -417,7 +391,8 @@ class MainFrame(wx.Frame):
             if infohash is None:
                 raise RuntimeError("Missing infohash")
             tdef = TorrentDefNoMetainfo(infohash, name, url=url)
-            wx.CallAfter(self.startDownload, tdef=tdef, cmdline=cmdline, destdir=destdir, selectedFiles=selectedFiles, vodmode=vodmode, hops=0)
+            wx.CallAfter(self.startDownload, tdef=tdef, cmdline=cmdline,
+                         destdir=destdir, selectedFiles=selectedFiles, vodmode=vodmode, hops=0)
         except Exception, e:
             # show an error dialog
             dlg = wx.MessageBox(self, "The magnet link is invalid: %s" % str(e),
@@ -435,7 +410,7 @@ class MainFrame(wx.Frame):
                           'destdir': destdir,
                           'selectedFiles': selectedFiles,
                           'vodmode': vodmode,
-                          'hops':hops}
+                          'hops': hops}
                 if wx.Thread_IsMain():
                     self.startDownload(**kwargs)
                 else:
@@ -485,7 +460,8 @@ class MainFrame(wx.Frame):
         try:
             d = self.utility.session.get_download(tdef.get_infohash())
             if d:
-                new_trackers = list(set(tdef.get_trackers_as_single_tuple()) - set(d.get_def().get_trackers_as_single_tuple()))
+                new_trackers = list(set(tdef.get_trackers_as_single_tuple()) - set(
+                    d.get_def().get_trackers_as_single_tuple()))
                 if not new_trackers:
                     raise DuplicateDownloadException()
 
@@ -493,7 +469,8 @@ class MainFrame(wx.Frame):
                     @forceWxThread
                     def do_gui():
                         # Show update tracker dialog
-                        dialog = wx.MessageDialog(None, 'This torrent is already being downloaded. Do you wish to load the trackers from it?', 'Tribler', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
+                        dialog = wx.MessageDialog(
+                            None, 'This torrent is already being downloaded. Do you wish to load the trackers from it?', 'Tribler', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
                         if dialog.ShowModal() == wx.ID_YES:
                             # Update trackers
                             self.utility.session.update_trackers(tdef.get_infohash(), new_trackers)
@@ -583,12 +560,11 @@ class MainFrame(wx.Frame):
                 if vodmode and len(videofiles) == 0 and (not tdef or not isinstance(tdef, TorrentDefNoMetainfo)):
                     vodmode = False
 
-                vodmode = vodmode or tdef.get_live()
-
                 if vodmode:
                     self._logger.info('MainFrame: startDownload: Starting in VOD mode')
                     result = self.utility.session.start_download(tdef, dscfg)
-                    self.guiUtility.library_manager.playTorrent(tdef.get_infohash(), videofiles[0] if len(videofiles) == 1 else None)
+                    self.guiUtility.library_manager.playTorrent(
+                        tdef.get_infohash(), videofiles[0] if len(videofiles) == 1 else None)
 
                 else:
                     if selectedFiles:
@@ -601,7 +577,8 @@ class MainFrame(wx.Frame):
                     self.show_saved(tdef)
 
                     if monitorHiddenSerivcesProgress:
-                        state_lambda = lambda ds, tdef = orig_tdef, dscfg = dscfg, selectedFiles = selectedFiles: self.monitorHiddenSerivcesProgress(ds, tdef, dscfg, selectedFiles)
+                        state_lambda = lambda ds, tdef = orig_tdef, dscfg = dscfg, selectedFiles = selectedFiles: self.monitorHiddenSerivcesProgress(
+                            ds, tdef, dscfg, selectedFiles)
                         result.set_state_callback(state_lambda, delay=40.0)
 
                 return result
@@ -619,8 +596,8 @@ class MainFrame(wx.Frame):
             if wx.Thread_IsMain():
                 # show nice warning dialog
                 dlg = wx.MessageDialog(None,
-                    "You are already downloading this torrent, see the Downloads section.",
-                    "Duplicate download", wx.OK | wx.ICON_ERROR)
+                                       "You are already downloading this torrent, see the Downloads section.",
+                                       "Duplicate download", wx.OK | wx.ICON_ERROR)
                 result = dlg.ShowModal()
                 dlg.Destroy()
 
@@ -658,9 +635,11 @@ class MainFrame(wx.Frame):
                 else:
                     self.guiUtility.Notify('Downloading .torrent from DHT', icon='magnet')
             elif torrentname:
-                self.guiUtility.Notify("Download started", "Torrent '%s' has been added to the download queue." % torrentname, icon='download')
+                self.guiUtility.Notify(
+                    "Download started", "Torrent '%s' has been added to the download queue." % torrentname, icon='download')
             else:
-                self.guiUtility.Notify("Download started", "A new torrent has been added to the download queue.", icon='download')
+                self.guiUtility.Notify(
+                    "Download started", "A new torrent has been added to the download queue.", icon='download')
 
             self._logger.info("Allowing refresh in 3 seconds %s", long(time.time() + 3))
             self.librarylist.GetManager().prev_refresh_if = time.time() - 27
@@ -814,7 +793,8 @@ class MainFrame(wx.Frame):
         found = False
         if event is not None:
             nr = event.GetEventType()
-            lookup = {wx.EVT_CLOSE.evtType[0]: "EVT_CLOSE", wx.EVT_QUERY_END_SESSION.evtType[0]: "EVT_QUERY_END_SESSION", wx.EVT_END_SESSION.evtType[0]: "EVT_END_SESSION"}
+            lookup = {wx.EVT_CLOSE.evtType[0]: "EVT_CLOSE", wx.EVT_QUERY_END_SESSION.evtType[
+                0]: "EVT_QUERY_END_SESSION", wx.EVT_END_SESSION.evtType[0]: "EVT_END_SESSION"}
             if nr in lookup:
                 nr = lookup[nr]
                 found = True
@@ -833,7 +813,8 @@ class MainFrame(wx.Frame):
             try:
                 if isinstance(event, wx.CloseEvent) and event.CanVeto() and self.utility.read_config('confirmonclose') and not event.GetEventType() == wx.EVT_QUERY_END_SESSION.evtType[0]:
                     if self.shutdown_and_upgrade_notes:
-                        confirmmsg = "Do you want to close Tribler and upgrade to the next version?  See release notes below" + "\n\n" + self.shutdown_and_upgrade_notes
+                        confirmmsg = "Do you want to close Tribler and upgrade to the next version?  See release notes below" + \
+                            "\n\n" + self.shutdown_and_upgrade_notes
                         confirmtitle = "Upgrade Tribler?"
                     else:
                         confirmmsg = "Do you want to close Tribler?"
@@ -922,7 +903,8 @@ class MainFrame(wx.Frame):
         if error_type == 0:
             errormsg = unicode(' UPnP mode ' + str(upnp_type) + ' ') + "request to the firewall failed."
         elif error_type == 1:
-            errormsg = unicode(' UPnP mode ' + str(upnp_type) + ' ') + "request to firewall returned:  '" + unicode(str(exc)) + "'. "
+            errormsg = unicode(' UPnP mode ' + str(upnp_type) + ' ') + \
+                "request to firewall returned:  '" + unicode(str(exc)) + "'. "
         elif error_type == 2:
             errormsg = unicode(' UPnP mode ' + str(upnp_type) + ' ') + "was enabled, but initialization failed."
         else:
@@ -946,7 +928,8 @@ class MainFrame(wx.Frame):
                 return
 
             if not wx.Thread_IsMain():
-                self._logger.debug("main: setActivity thread %s is NOT MAIN THREAD", threading.currentThread().getName())
+                self._logger.debug(
+                    "main: setActivity thread %s is NOT MAIN THREAD", threading.currentThread().getName())
                 print_stack()
 
             if type == NTFY_ACT_NONE:

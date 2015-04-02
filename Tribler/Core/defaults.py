@@ -34,7 +34,7 @@ DEFAULTPORT = 7760
 #  Version 4: remove swift
 #
 
-SESSDEFAULTS_VERSION = 6
+SESSDEFAULTS_VERSION = 7
 sessdefaults = OrderedDict()
 
 # General Tribler settings
@@ -46,8 +46,10 @@ sessdefaults['general']['ip'] = '0.0.0.0'
 sessdefaults['general']['minport'] = DEFAULTPORT
 sessdefaults['general']['maxport'] = DEFAULTPORT
 sessdefaults['general']['bind'] = []
-sessdefaults['general']['ipv6_enabled'] = 0  # allow the client to connect to peers via IPv6 (currently not supported)
-sessdefaults['general']['ipv6_binds_v4'] = None  # set if an IPv6 server socket won't also field IPv4 connections (default = set automatically)
+# allow the client to connect to peers via IPv6 (currently not supported)
+sessdefaults['general']['ipv6_enabled'] = 0
+# set if an IPv6 server socket won't also field IPv4 connections (default = set automatically)
+sessdefaults['general']['ipv6_binds_v4'] = None
 sessdefaults['general']['timeout'] = 300.0
 sessdefaults['general']['timeout_check_interval'] = 60.0
 sessdefaults['general']['eckeypairfilename'] = None
@@ -57,6 +59,14 @@ sessdefaults['general']['mugshot'] = None
 sessdefaults['general']['videoanalyserpath'] = None
 sessdefaults['general']['peer_icon_path'] = None
 sessdefaults['general']['live_aux_seeders'] = []
+
+# AllChannel community section
+sessdefaults['allchannel_community'] = OrderedDict()
+sessdefaults['allchannel_community']['enabled'] = True
+
+# Search community section
+sessdefaults['search_community'] = OrderedDict()
+sessdefaults['search_community']['enabled'] = True
 
 # Tunnel community section
 sessdefaults['tunnel_community'] = OrderedDict()
@@ -72,7 +82,8 @@ sessdefaults['mainline_dht']['mainline_dht_port'] = -1
 # Torrent checking settings
 sessdefaults['torrent_checking'] = OrderedDict()
 sessdefaults['torrent_checking']['enabled'] = 1
-sessdefaults['torrent_checking']['torrent_checking_period'] = 31  # will be changed to min(max(86400/ntorrents, 15), 300) at runtime
+# will be changed to min(max(86400/ntorrents, 15), 300) at runtime
+sessdefaults['torrent_checking']['torrent_checking_period'] = 31
 
 # Torrent store settings
 sessdefaults['torrent_store'] = OrderedDict()
@@ -114,7 +125,6 @@ sessdefaults['video']['port'] = -1
 sessdefaults['video']['preferredmode'] = PLAYBACKMODE_INTERNAL
 
 
-
 #
 # BT per download opts
 #
@@ -127,8 +137,10 @@ sessdefaults['video']['preferredmode'] = PLAYBACKMODE_INTERNAL
 #  Version 8: deleted many of the old params that were not used anymore (due to the switch to libtorrent)
 #  Version 9: remove swift
 #  Version 10: add default anonymous level
+#  Version 11: remove createmerkletorrent, torrentsigkeypairfilename, makehash_md5, makehash_crc32, makehash_sha1
+#  Version 12: remove thumb
 
-DLDEFAULTS_VERSION = 10
+DLDEFAULTS_VERSION = 11
 dldefaults = OrderedDict()
 
 # General download settings
@@ -157,12 +169,6 @@ tdefdictdefaults['encoding'] = None
 tdefmetadefaults = {}
 tdefmetadefaults['version'] = 1
 tdefmetadefaults['piece length'] = 0
-tdefmetadefaults['makehash_md5'] = 0
-tdefmetadefaults['makehash_crc32'] = 0
-tdefmetadefaults['makehash_sha1'] = 0
-tdefmetadefaults['createmerkletorrent'] = 0
-tdefmetadefaults['torrentsigkeypairfilename'] = None
-tdefmetadefaults['thumb'] = None  # JPEG data
 
 TDEF_DEFAULTS = {}
 TDEF_DEFAULTS.update(tdefdictdefaults)

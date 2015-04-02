@@ -8,7 +8,6 @@ from threading import Event
 from traceback import print_exc
 
 from Tribler.Core.version import version_id
-from Tribler.Core.simpledefs import TRIBLER_TORRENT_EXT
 from Tribler.Core.TorrentDef import TorrentDef
 
 from Tribler.Main.vwxGUI import forceWxThread
@@ -163,7 +162,8 @@ class CreateTorrent(wx.Dialog):
         self.paths = None
 
     def OnBrowse(self, event):
-        dlg = wx.FileDialog(None, "Please select the file(s).", style=wx.FD_OPEN | wx.FD_MULTIPLE, defaultDir=self.latestFile)
+        dlg = wx.FileDialog(None, "Please select the file(s).",
+                            style=wx.FD_OPEN | wx.FD_MULTIPLE, defaultDir=self.latestFile)
         if dlg.ShowModal() == wx.ID_OK:
             filenames = dlg.GetPaths()
             dlg.Destroy()
@@ -205,9 +205,11 @@ class CreateTorrent(wx.Dialog):
     def OnOk(self, event):
         max = 1 if self.combineRadio.GetValue() else len(self.selectedPaths)
         if self.toChannel:
-            dlg = wx.MessageDialog(self, "This will add %d new .torrents to this Channel.\nDo you want to continue?" % max, "Are you sure?", style=wx.YES_NO | wx.ICON_QUESTION)
+            dlg = wx.MessageDialog(self, "This will add %d new .torrents to this Channel.\nDo you want to continue?" %
+                                   max, "Are you sure?", style=wx.YES_NO | wx.ICON_QUESTION)
         else:
-            dlg = wx.MessageDialog(self, "This will create %d new .torrents.\nDo you want to continue?" % max, "Are you sure?", style=wx.YES_NO | wx.ICON_QUESTION)
+            dlg = wx.MessageDialog(self, "This will create %d new .torrents.\nDo you want to continue?" %
+                                   max, "Are you sure?", style=wx.YES_NO | wx.ICON_QUESTION)
 
         if dlg.ShowModal() == wx.ID_YES:
             dlg.Destroy()
@@ -236,12 +238,6 @@ class CreateTorrent(wx.Dialog):
             params['nodes'] = False
             params['httpseeds'] = False
             params['encoding'] = False
-            params['makehash_md5'] = False
-            params['makehash_crc32'] = False
-            params['makehash_sha1'] = True
-            params['createmerkletorrent'] = False
-            params['torrentsigkeypairfilename'] = False
-            params['thumb'] = False
 
             piece_length_list = [0, 2 ** 22, 2 ** 21, 2 ** 20, 2 ** 19, 2 ** 18, 2 ** 17, 2 ** 16, 2 ** 15]
             if self.pieceChoice.GetSelection() != wx.NOT_FOUND:
@@ -271,9 +267,12 @@ class CreateTorrent(wx.Dialog):
 
             def start():
                 if self.combineRadio.GetValue():
-                    self.progressDlg = wx.ProgressDialog("Creating new .torrents", "Please wait while Tribler is creating your .torrents.\nThis could take a while due to creating the required hashes.", maximum=max, parent=self, style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+                    self.progressDlg = wx.ProgressDialog(
+                        "Creating new .torrents", "Please wait while Tribler is creating your .torrents.\nThis could take a while due to creating the required hashes.", maximum=max, parent=self, style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
                 else:
-                    self.progressDlg = wx.ProgressDialog("Creating new .torrents", "Please wait while Tribler is creating your .torrents.\nThis could take a while due to creating the required hashes.", maximum=max, parent=self, style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME | wx.PD_AUTO_HIDE)
+                    self.progressDlg = wx.ProgressDialog(
+                        "Creating new .torrents", "Please wait while Tribler is creating your .torrents.\nThis could take a while due to creating the required hashes.",
+                                                         maximum=max, parent=self, style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME | wx.PD_AUTO_HIDE)
                 self.progressDlg.Pulse()
                 self.progressDlg.cur = 0
 
@@ -291,7 +290,8 @@ class CreateTorrent(wx.Dialog):
 
                 nrPieces = total_size / params['piece length']
                 if nrPieces > 2500:
-                    dlg2 = wx.MessageDialog(self, "The selected piecesize will cause a torrent to have %d pieces.\nThis is more than the recommended max 2500 pieces.\nDo you want to continue?" % nrPieces, "Are you sure?", style=wx.YES_NO | wx.ICON_QUESTION)
+                    dlg2 = wx.MessageDialog(self, "The selected piecesize will cause a torrent to have %d pieces.\nThis is more than the recommended max 2500 pieces.\nDo you want to continue?" %
+                                            nrPieces, "Are you sure?", style=wx.YES_NO | wx.ICON_QUESTION)
                     if dlg2.ShowModal() == wx.ID_YES:
                         start()
                     dlg2.Destroy()
@@ -374,27 +374,21 @@ def make_meta_file(srcpaths, params, userabortflag, progressCallback, torrentfil
     if nrFiles > 1:
         # outpaths should start with a common prefix, this prefix is the swarmname of the torrent
         # if srcpaths contain c:\a\1, c:\a\2 -> basepath should be c:\ and basedir a and outpaths should be a\1 and a\2
-        # if srcpaths contain c:\a\1, c:\a\2, c:\a\b\1, c:\a\b\2 -> basepath should be c:\ and outpaths should be a\1, a\2, a\b\1 and a\b\2
+        # if srcpaths contain c:\a\1, c:\a\2, c:\a\b\1, c:\a\b\2 -> basepath
+        # should be c:\ and outpaths should be a\1, a\2, a\b\1 and a\b\2
         basepath = os.path.abspath(os.path.commonprefix(srcpaths))
         basepath, basedir = os.path.split(basepath)
         for srcpath in srcpaths:
             if os.path.isfile(srcpath):
                 outpath = os.path.relpath(srcpath, basepath)
 
-                # h4x0r playtime
-                if 'playtime' in params:
-                    tdef.add_content(srcpath, outpath, playtime=params['playtime'])
-                else:
-                    tdef.add_content(srcpath, outpath)
+                tdef.add_content(srcpath, outpath)
     else:
         srcpaths = [file for file in srcpaths if os.path.isfile(file)]
 
         srcpath = srcpaths[0]
         basepath, _ = os.path.split(srcpath)
-        if 'playtime' in params:
-            tdef.add_content(srcpath, playtime=params['playtime'])
-        else:
-            tdef.add_content(srcpath)
+        tdef.add_content(srcpath)
 
         if params.get('urllist', False):
             tdef.set_urllist(params['urllist'])
@@ -410,40 +404,19 @@ def make_meta_file(srcpaths, params, userabortflag, progressCallback, torrentfil
     if params['announce-list']:
         tdef.set_tracker_hierarchy(params['announce-list'])
     if params['nodes']:  # mainline DHT
-        tdef.set_dht_nodesmax(params['nodes'])
+        tdef.set_dht_nodes(params['nodes'])
     if params['httpseeds']:
         tdef.set_httpseeds(params['httpseeds'])
     if params['encoding']:
         tdef.set_encoding(params['encoding'])
     if params['piece length']:
         tdef.set_piece_length(params['piece length'])
-    if params['makehash_md5']:
-        logger.info("TorrentMaker: make MD5")
-        tdef.set_add_md5hash(params['makehash_md5'])
-    if params['makehash_crc32']:
-        logger.info("TorrentMaker: make CRC32")
-        tdef.set_add_crc32(params['makehash_crc32'])
-    if params['makehash_sha1']:
-        logger.info("TorrentMaker: make SHA1")
-        tdef.set_add_sha1hash(params['makehash_sha1'])
-    if params['createmerkletorrent']:
-        tdef.set_create_merkle_torrent(params['createmerkletorrent'])
-    if params['torrentsigkeypairfilename']:
-        tdef.set_signature_keypair_filename(params['torrentsigkeypairfilename'])
-    if params['thumb']:
-        tdef.set_thumbnail(params['thumb'])
 
     tdef.finalize(userabortflag=userabortflag, userprogresscallback=progressCallback)
 
-    if params['createmerkletorrent']:
-        postfix = TRIBLER_TORRENT_EXT
-    else:
-        postfix = '.torrent'
+    postfix = '.torrent'
 
-    if params.get('target', False):
-        torrentfilename = os.path.join(params['target'], os.path.split(os.path.normpath(srcpath))[1] + postfix)
-    else:
-        torrentfilename = os.path.join(basepath, tdef.get_name() + postfix)
+    torrentfilename = os.path.join(basepath, tdef.get_name() + postfix)
     tdef.save(torrentfilename)
 
     # Inform higher layer we created torrent

@@ -14,12 +14,12 @@ class SearchConversion(BinaryConversion):
 
     def __init__(self, community):
         super(SearchConversion, self).__init__(community, "\x02")
-        self.define_meta_message(chr(1), community.get_meta_message(u"search-request"), lambda message: self._encode_decode(self._encode_search_request, self._decode_search_request, message), self._decode_search_request)
-        self.define_meta_message(chr(2), community.get_meta_message(u"search-response"), lambda message: self._encode_decode(self._encode_search_response, self._decode_search_response, message), self._decode_search_response)
-        self.define_meta_message(chr(3), community.get_meta_message(u"torrent-request"), lambda message: self._encode_decode(self._encode_torrent_request, self._decode_torrent_request, message), self._decode_torrent_request)
-        self.define_meta_message(chr(4), community.get_meta_message(u"torrent-collect-request"), lambda message: self._encode_decode(self._encode_torrent_collect_request, self._decode_torrent_collect_request, message), self._decode_torrent_collect_request)
-        self.define_meta_message(chr(5), community.get_meta_message(u"torrent-collect-response"), lambda message: self._encode_decode(self._encode_torrent_collect_response, self._decode_torrent_collect_response, message), self._decode_torrent_collect_response)
-        self.define_meta_message(chr(6), community.get_meta_message(u"torrent"), lambda message: self._encode_decode(self._encode_torrent, self._decode_torrent, message), self._decode_torrent)
+        self.define_meta_message(chr(1), community.get_meta_message(u"search-request"), self._encode_search_request, self._decode_search_request)
+        self.define_meta_message(chr(2), community.get_meta_message(u"search-response"), self._encode_search_response, self._decode_search_response)
+        self.define_meta_message(chr(3), community.get_meta_message(u"torrent-request"), self._encode_torrent_request, self._decode_torrent_request)
+        self.define_meta_message(chr(4), community.get_meta_message(u"torrent-collect-request"), self._encode_torrent_collect_request, self._decode_torrent_collect_request)
+        self.define_meta_message(chr(5), community.get_meta_message(u"torrent-collect-response"), self._encode_torrent_collect_response, self._decode_torrent_collect_response)
+        self.define_meta_message(chr(6), community.get_meta_message(u"torrent"), self._encode_torrent, self._decode_torrent)
 
     def _encode_introduction_request(self, message):
         data = BinaryConversion._encode_introduction_request(self, message)
@@ -63,17 +63,6 @@ class SearchConversion(BinaryConversion):
             payload.set_taste_bloom_filter(taste_bloom_filter)
 
         return offset, payload
-
-    def _encode_decode(self, encode, decode, message):
-        result = encode(message)
-        try:
-            decode(None, 0, result[0])
-
-        except DropPacket:
-            raise
-        except:
-            pass
-        return result
 
     def _encode_search_request(self, message):
         packet = pack('!H', message.payload.identifier), message.payload.keywords
@@ -157,7 +146,7 @@ class SearchConversion(BinaryConversion):
             if len(result) < 9:
                 raise DropPacket("Invalid result length")
 
-            infohash, swarmname, length, nrfiles, categorykeys, creation_date, seeders, leechers, cid = result[:9]
+            infohash, swarmname, length, nrfiles, category_list, creation_date, seeders, leechers, cid = result[:9]
 
             if not isinstance(infohash, str):
                 raise DropPacket("Invalid infohash type")
@@ -173,11 +162,8 @@ class SearchConversion(BinaryConversion):
             if not isinstance(nrfiles, int):
                 raise DropPacket("Invalid nrfiles type")
 
-            if not isinstance(categorykeys, list):
-                raise DropPacket("Invalid categorykeys type")
-
-            if not all(isinstance(key, unicode) for key in categorykeys):
-                raise DropPacket("Invalid categorykey type")
+            if not isinstance(category_list, list) or not all(isinstance(key, unicode) for key in category_list):
+                raise DropPacket("Invalid category_list type")
 
             if not isinstance(creation_date, long):
                 raise DropPacket("Invalid creation_date type")

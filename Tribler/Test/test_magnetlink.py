@@ -4,15 +4,14 @@
 from binascii import hexlify
 import socket
 import os
-import sys
 import threading
 import libtorrent as lt
+from libtorrent import bencode, bdecode
 
 from Tribler.Test.test_as_server import TestAsServer, BASE_DIR
 from btconn import BTConnection
 from Tribler.Core.TorrentDef import TorrentDef
 from Tribler.Core.DownloadConfig import DownloadStartupConfig
-from Tribler.Core.Utilities.bencode import bencode, bdecode, sloppy_bdecode
 from Tribler.Core.MessageID import EXTEND
 from Tribler.Core.simpledefs import dlstatus_strings, DLSTATUS_SEEDING
 from Tribler.Core.Libtorrent.LibtorrentMgr import LibtorrentMgr
@@ -51,7 +50,7 @@ class MagnetHelpers(object):
         assert isinstance(m, dict)
         assert "ut_metadata" in m.keys()
         val = m["ut_metadata"]
-        assert isinstance(val, int)
+        assert isinstance(val, (int, long)), repr(val)
         return val
 
     def read_extend_handshake(self, conn):
@@ -88,7 +87,8 @@ class MagnetHelpers(object):
         assert response[0] == EXTEND
         assert ord(response[1]) == 3
 
-        payload, length = sloppy_bdecode(response[2:])
+        payload = bdecode(response[2:])
+        length = len(bencode(payload))
         assert payload["msg_type"] == 1
         assert payload["piece"] == piece
         if "data" in payload:
@@ -106,7 +106,8 @@ class MagnetHelpers(object):
         assert response[0] == EXTEND
         assert ord(response[1]) == 3
 
-        payload, length = sloppy_bdecode(response[2:])
+        payload = bdecode(response[2:])
+        length = len(bencode(payload))
         assert payload["msg_type"] in (1, 2), [payload, response[2:2 + length]]
         assert payload["piece"] == piece, [payload, response[2:2 + length]]
 
@@ -146,7 +147,8 @@ class TestMagnet(TestAsServer):
                 event.set()
 
             event = threading.Event()
-            assert TorrentDef.retrieve_from_magnet('magnet:?xt=urn:btih:5ac55cf1b935291f6fc92ad7afd34597498ff2f7&dn=Pioneer+One+S01E01+Xvid-VODO&title=', torrentdef_retrieved, timeout=120)
+            magnet_link = 'magnet:?xt=urn:btih:5ac55cf1b935291f6fc92ad7afd34597498ff2f7&dn=Pioneer+One+S01E01+Xvid-VODO&title='
+            assert TorrentDef.retrieve_from_magnet(self.session, magnet_link, torrentdef_retrieved, timeout=120)
             assert event.wait(120)
 
         self.startTest(do_transfer)
@@ -158,6 +160,7 @@ class TestMagnetFakePeer(TestAsServer, MagnetHelpers):
     A MiniBitTorrent instance is used to connect to BitTorrent clients
     and download the info part from the metadata.
     """
+
     def setUp(self):
         # listener for incoming connections from MiniBitTorrent
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -245,6 +248,7 @@ class TestMetadataFakePeer(TestAsServer, MagnetHelpers):
     the ut_metadata extention message.  This allows other clients to
     obtain the info part of the metadata from us.
     """
+
     def setUp(self):
         TestAsServer.setUp(self)
 
@@ -288,7 +292,8 @@ class TestMetadataFakePeer(TestAsServer, MagnetHelpers):
             self.seeder_setup_complete.set()
 
         d = ds.get_download()
-        self._logger.debug("seeder: %s %s %s", repr(d.get_def().get_name()), dlstatus_strings[ds.get_status()], ds.get_progress())
+        self._logger.debug("seeder: %s %s %s", repr(d.get_def().get_name()),
+                           dlstatus_strings[ds.get_status()], ds.get_progress())
         return 1.0, False
 
     def test_good_request(self):

@@ -1,15 +1,12 @@
 # Written by Arno Bakker
 # see LICENSE.txt for license information
 import os
-import sys
 import time
 import socket
-import random
 import binascii
 from traceback import print_exc
 
 from Tribler.Test.test_as_server import BASE_DIR, TestAsServer
-from Tribler.Core.Video.VideoPlayer import VideoPlayer
 from Tribler.Core.TorrentDef import TorrentDef
 from Tribler.Core.DownloadConfig import DownloadStartupConfig
 
@@ -125,7 +122,6 @@ class TestVideoHTTPServer(TestAsServer):
         # the amount of bytes actually requested. (Content-length)
         expsize = explastbyte - expfirstbyte + 1
 
-
         self._logger.debug("Expecting first %s last %s size %s ", expfirstbyte, explastbyte, sourcesize)
         s.send(head)
 
@@ -153,7 +149,8 @@ class TestVideoHTTPServer(TestAsServer):
                     return
 
             elif line.startswith("Content-Range:"):
-                expline = "Content-Range: bytes " + self.create_range_str(expfirstbyte, explastbyte) + "/" + str(sourcesize) + "\r\n"
+                expline = "Content-Range: bytes " + self.create_range_str(
+                    expfirstbyte, explastbyte) + "/" + str(sourcesize) + "\r\n"
                 self.assertEqual(expline, line)
 
             elif line.startswith("Content-Type:"):
@@ -190,7 +187,8 @@ class TestVideoHTTPServer(TestAsServer):
 
             except socket.timeout:
                 if DEBUG:
-                    self._logger.debug("Timeout, video server didn't respond with requested bytes, possibly bug in Python impl of HTTP")
+                    self._logger.debug(
+                        "Timeout, video server didn't respond with requested bytes, possibly bug in Python impl of HTTP")
                     print_exc()
 
     def readline(self, s):

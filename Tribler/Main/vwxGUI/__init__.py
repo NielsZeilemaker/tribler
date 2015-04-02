@@ -1,15 +1,12 @@
 # Written by Jelle Roozenburg, Maarten ten Brinke, Arno Bakker
 # ReWritten by Niels Zeilemaker
 # see LICENSE.txt for license information
-from time import time, sleep
+from time import time
 import wx
 import inspect
-import sys
 import logging
 
 from datetime import datetime
-from Tribler.Main.Utility.GuiDBHandler import onWorkerThread, startWorker, \
-    GUI_PRI_DISPERSY
 
 from threading import Event
 from Tribler.Core.CacheDB.sqlitecachedb import TRHEADING_DEBUG
@@ -54,11 +51,10 @@ FILTER_GREY = wx.Colour(240, 240, 240)
 LIST_RADIUS = 7
 LIST_AUTOSIZEHEADER = -2
 
-CHANNEL_REQ_COLUMNS = ['ChannelTorrents.channel_id', 'Torrent.torrent_id', 'infohash', '""', 'torrent_file_name', 'length', 'category_id', 'status_id', 'num_seeders', 'num_leechers', 'ChannelTorrents.id', 'ChannelTorrents.dispersy_id', 'ChannelTorrents.name', 'Torrent.name', 'ChannelTorrents.description', 'ChannelTorrents.time_stamp', 'ChannelTorrents.inserted']
+CHANNEL_REQ_COLUMNS = ['ChannelTorrents.channel_id', 'Torrent.torrent_id', 'infohash', '""', 'length', 'category', 'status', 'num_seeders', 'num_leechers', 'ChannelTorrents.id', 'ChannelTorrents.dispersy_id', 'ChannelTorrents.name', 'Torrent.name', 'ChannelTorrents.description', 'ChannelTorrents.time_stamp', 'ChannelTorrents.inserted']
 PLAYLIST_REQ_COLUMNS = ['Playlists.id', 'Playlists.dispersy_id', 'Playlists.channel_id', 'Playlists.name', 'Playlists.description']
-LIBRARY_REQ_COLUMNS = CHANNEL_REQ_COLUMNS + ['progress']
-TORRENT_REQ_COLUMNS = ['T.torrent_id', 'infohash', 'T.name', 'torrent_file_name', 'length', 'category_id', 'status_id', 'num_seeders', 'num_leechers', 'C.id', 'T.dispersy_id', 'C.name', 'T.name', 'C.description', 'C.time_stamp', 'C.inserted']
-TUMBNAILTORRENT_REQ_COLUMNS = ['torrent_id', 'MetadataMessage.infohash', 'name', 'torrent_file_name', 'length', 'category_id', 'status_id', 'num_seeders', 'num_leechers']
+TORRENT_REQ_COLUMNS = ['T.torrent_id', 'infohash', 'T.name', 'length', 'category', 'status', 'num_seeders', 'num_leechers', 'C.id', 'T.dispersy_id', 'C.name', 'T.name', 'C.description', 'C.time_stamp', 'C.inserted']
+TUMBNAILTORRENT_REQ_COLUMNS = ['torrent_id', 'MetadataMessage.infohash', 'name', 'length', 'category', 'status', 'num_seeders', 'num_leechers']
 
 COMMENT_REQ_COLUMNS = ['Comments.id', 'Comments.dispersy_id', 'CommentTorrent.channeltorrent_id', 'name', 'Peer.peer_id', 'comment', 'reply_to_id', 'inserted', 'time_stamp']
 
@@ -72,7 +68,8 @@ MODERATION_REQ_COLUMNS = tmp
 
 CHANNEL_MAX_NON_FAVORITE = 50
 
-VLC_SUPPORTED_SUBTITLES = ['.cdg', '.idx', '.srt', '.sub', '.utf', '.ass', '.ssa', '.aqt', '.jss', '.psb', '.rt', '.smi']
+VLC_SUPPORTED_SUBTITLES = ['.cdg', '.idx', '.srt', '.sub', '.utf', '.ass',
+                           '.ssa', '.aqt', '.jss', '.psb', '.rt', '.smi']
 
 
 def format_time(val):
@@ -93,6 +90,7 @@ def format_size(val):
     size = (val / 1048576.0)
     return "%.0f MB" % size
 
+
 def showError(textCtrl):
     def setColours(ctrl, fore, back):
         ctrl.SetForegroundColour(fore)
@@ -110,7 +108,8 @@ def warnWxThread(func):
         if not wx.Thread_IsMain():
             caller = inspect.stack()[1]
             callerstr = "%s %s:%s" % (caller[3], caller[1], caller[2])
-            logger.warn("%s NOT ON GUITHREAD %s %s:%s called by %s", long(time()), func.__name__, func.func_code.co_filename, func.func_code.co_firstlineno, callerstr)
+            logger.warn("%s NOT ON GUITHREAD %s %s:%s called by %s", long(time()),
+                        func.__name__, func.func_code.co_filename, func.func_code.co_firstlineno, callerstr)
 
         return func(*args, **kwargs)
 
@@ -126,7 +125,8 @@ def forceWxThread(func):
             if TRHEADING_DEBUG:
                 caller = inspect.stack()[1]
                 callerstr = "%s %s:%s" % (caller[3], caller[1], caller[2])
-                logger.debug("%s SWITCHING TO GUITHREAD %s %s:%s called by %s", long(time()), func.__name__, func.func_code.co_filename, func.func_code.co_firstlineno, callerstr)
+                logger.debug("%s SWITCHING TO GUITHREAD %s %s:%s called by %s", long(time()),
+                             func.__name__, func.func_code.co_filename, func.func_code.co_firstlineno, callerstr)
             wx.CallAfter(func, *args, **kwargs)
 
     invoke_func.__name__ = func.__name__
@@ -142,7 +142,8 @@ def forceAndReturnWxThread(func):
             if TRHEADING_DEBUG:
                 caller = inspect.stack()[1]
                 callerstr = "%s %s:%s" % (caller[3], caller[1], caller[2])
-                logger.debug("%s SWITCHING TO GUITHREAD %s %s:%s called by %s", long(time()), func.__name__, func.func_code.co_filename, func.func_code.co_firstlineno, callerstr)
+                logger.debug("%s SWITCHING TO GUITHREAD %s %s:%s called by %s", long(time()),
+                             func.__name__, func.func_code.co_filename, func.func_code.co_firstlineno, callerstr)
 
             event = Event()
 

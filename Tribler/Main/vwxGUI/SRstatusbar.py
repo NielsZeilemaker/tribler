@@ -89,6 +89,9 @@ class SRstatusbar(wx.StatusBar):
         self.Reposition()
 
     def RefreshTransferSpeed(self, dslist, magnetlist):
+        if not self:
+            return
+
         total_down, total_up = 0.0, 0.0
         for ds in dslist:
             total_down += ds.get_current_speed(DOWNLOAD)
@@ -168,6 +171,7 @@ class SRstatusbar(wx.StatusBar):
 
     def GetConnections(self):
         return self.connection.GetPercentage()
+
     def GetChannelConnections(self):
         return self.channelconnections
 

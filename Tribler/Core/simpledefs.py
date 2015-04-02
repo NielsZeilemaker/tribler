@@ -41,7 +41,6 @@ For details see API.py
 
 STATEDIR_DLPSTATE_DIR = 'dlcheckpoints'
 STATEDIR_PEERICON_DIR = 'icons'
-STATEDIR_TORRENTCOLL_DIR = 'collected_torrent_files'
 STATEDIR_TORRENT_STORE_DIR = 'collected_torrents'
 
 STATEDIR_SESSCONFIG = 'libtribler.conf'
@@ -49,7 +48,6 @@ STATEDIR_SESSCONFIG = 'libtribler.conf'
 # For observer/callback mechanism, see Session.add_observer()
 
 # subjects
-NTFY_MISC = 'misc'
 NTFY_METADATA = 'metadata'
 NTFY_PEERS = 'peers'
 NTFY_TORRENTS = 'torrents'
@@ -65,7 +63,6 @@ NTFY_VOTECAST = 'votecast'
 NTFY_CHANNELCAST = 'channelcast'
 NTFY_TUNNEL = 'tunnel'
 NTFY_TRACKERINFO = 'trackerinfo'
-NTFY_BUNDLERPREFERENCE = "bundlepreference"
 
 # non data handler subjects
 NTFY_ACTIVITIES = 'activities'  # an activity was set (peer met/dns resolved)
@@ -114,16 +111,16 @@ LIVE_AUTHMETHOD_NONE = "None"  # No auth, also no abs. piece nr. or timestamp.
 LIVE_AUTHMETHOD_ECDSA = "ECDSA"  # Elliptic Curve DSA signatures
 LIVE_AUTHMETHOD_RSA = "RSA"  # RSA signatures
 
-
-P2PURL_SCHEME = "tribe"  # No colon
-
-TRIBLER_TORRENT_EXT = ".tribe"  # Unused
-
 # Infohashes are always 20 byte binary strings
 INFOHASH_LENGTH = 20
 
 
-# SIGNALS
-SIGNAL_ALLCHANNEL = 'allchannel'
-SIGNAL_SEARCH_COMMUNITY = 'search_community'
-SIGNAL_ONSEARCHRESULTS = 'onsearchresults'
+# SIGNALS (for internal use)
+SIGNAL_ALLCHANNEL_COMMUNITY = 'signal_allchannel_community'
+SIGNAL_SEARCH_COMMUNITY = 'signal_search_community'
+SIGNAL_ON_SEARCH_RESULTS = 'signal_on_search_results'
+
+
+# SIGNALS (for common use, like APIs)
+SIGNAL_TORRENT = 'signal_torrent'
+SIGNAL_CHANNEL = 'signal_channel'

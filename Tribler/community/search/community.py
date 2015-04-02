@@ -1,5 +1,4 @@
 # Written by Niels Zeilemaker
-from os import path
 from random import shuffle
 from time import time
 from binascii import hexlify
@@ -8,7 +7,6 @@ from traceback import print_exc
 from twisted.internet.task import LoopingCall
 
 from Tribler.Core.CacheDB.sqlitecachedb import bin2str
-from Tribler.Core.RemoteTorrentHandler import RemoteTorrentHandler
 from Tribler.Core.TorrentDef import TorrentDef
 from Tribler.community.channel.payload import TorrentPayload
 from Tribler.community.channel.preview import PreviewChannelCommunity
@@ -65,7 +63,6 @@ class SearchCommunity(Community):
         self.taste_buddies = []
 
         self._channelcast_db = None
-        self._misc_db = None
         self._torrent_db = None
         self._mypref_db = None
         self._notifier = None
@@ -87,18 +84,17 @@ class SearchCommunity(Community):
         # self.taste_buddies.append([1, time(), Candidate(("127.0.0.1", 1234), False))
 
         if self.integrate_with_tribler:
-            from Tribler.Core.simpledefs import NTFY_MISC, NTFY_CHANNELCAST, NTFY_TORRENTS, NTFY_MYPREFERENCES
+            from Tribler.Core.simpledefs import NTFY_CHANNELCAST, NTFY_TORRENTS, NTFY_MYPREFERENCES
             from Tribler.Core.CacheDB.Notifier import Notifier
 
             # tribler channelcast database
             self._channelcast_db = tribler_session.open_dbhandler(NTFY_CHANNELCAST)
-            self._misc_db = tribler_session.open_dbhandler(NTFY_MISC)
             self._torrent_db = tribler_session.open_dbhandler(NTFY_TORRENTS)
             self._mypref_db = tribler_session.open_dbhandler(NTFY_MYPREFERENCES)
             self._notifier = Notifier.getInstance()
 
             # torrent collecting
-            self._rtorrent_handler = RemoteTorrentHandler.getInstance()
+            self._rtorrent_handler = tribler_session.lm.rtorrent_handler
         else:
             self._channelcast_db = ChannelCastDBStub(self._dispersy)
             self._torrent_db = None
@@ -344,7 +340,7 @@ class SearchCommunity(Community):
                 self.log_incomming_searches(message.candidate.sock_addr, keywords)
 
             results = []
-            dbresults = self._torrent_db.searchNames(keywords, local=False, keys=['infohash', 'T.name', 'T.length', 'T.num_files', 'T.category_id', 'T.creation_date', 'T.num_seeders', 'T.num_leechers'])
+            dbresults = self._torrent_db.searchNames(keywords, local=False, keys=['infohash', 'T.name', 'T.length', 'T.num_files', 'T.category', 'T.creation_date', 'T.num_seeders', 'T.num_leechers'])
             if len(dbresults) > 0:
                 for dbresult in dbresults:
                     channel_details = dbresult[-10:]
@@ -352,7 +348,7 @@ class SearchCommunity(Community):
                     dbresult = list(dbresult[:8])
                     dbresult[2] = long(dbresult[2])  # length
                     dbresult[3] = int(dbresult[3])  # num_files
-                    dbresult[4] = [self._misc_db.categoryId2Name(dbresult[4]), ]  # category_keys
+                    dbresult[4] = [dbresult[4]]  # category
                     dbresult[5] = long(dbresult[5])  # creation_date
                     dbresult[6] = int(dbresult[6] or 0)  # num_seeders
                     dbresult[7] = int(dbresult[7] or 0)  # num_leechers
@@ -394,11 +390,11 @@ class SearchCommunity(Community):
 
                     # emit signal of search results
                     if self.tribler_session is not None:
-                        from Tribler.Core.simpledefs import SIGNAL_SEARCH_COMMUNITY, SIGNAL_ONSEARCHRESULTS
+                        from Tribler.Core.simpledefs import SIGNAL_SEARCH_COMMUNITY, SIGNAL_ON_SEARCH_RESULTS
                         search_results = {'keywords': search_request.keywords,
                                           'results': message.payload.results,
                                           'candidate': message.candidate}
-                        self.tribler_session.uch.notify(SIGNAL_SEARCH_COMMUNITY, SIGNAL_ONSEARCHRESULTS, None,
+                        self.tribler_session.uch.notify(SIGNAL_SEARCH_COMMUNITY, SIGNAL_ON_SEARCH_RESULTS, None,
                                                         search_results)
 
                     # see if we need to join some channels
@@ -516,9 +512,9 @@ class SearchCommunity(Community):
                 self._torrent_db.on_torrent_collect_response(to_insert_list[:50])
                 to_insert_list = to_insert_list[50:]
 
-        infohashes = [infohash_ for infohash_ in to_collect_dict if infohash_]
-        if infohashes:
-            infohashes_to_collect = self._torrent_db.select_torrents_to_collect(infohashes)
+        infohashes_to_collect = [infohash for infohash in to_collect_dict
+                                 if infohash and self.tribler_session.has_collected_torrent(infohash)]
+        if infohashes_to_collect:
             for infohash in infohashes_to_collect[:5]:
                 for candidate in to_collect_dict[infohash]:
                     self._logger.debug(u"requesting .torrent after receiving ping/pong %s %s",
@@ -592,10 +588,11 @@ class SearchCommunity(Community):
         self.torrent_cache = (time(), torrents)
         return torrents
 
-    def create_torrent(self, filename, store=True, update=True, forward=True):
-        if path.exists(filename):
+    def create_torrent(self, infohash, store=True, update=True, forward=True):
+        torrent_data = self.tribler_session.get_collected_torrent(infohash)
+        if torrent_data is not None:
             try:
-                torrentdef = TorrentDef.load(filename)
+                torrentdef = TorrentDef.load_from_memory(torrent_data)
                 files = torrentdef.get_files_as_unicode_with_length()
 
                 meta = self.get_meta_message(u"torrent")
@@ -668,13 +665,13 @@ class SearchCommunity(Community):
             if channel_id:
                 dispersy_id = self._channelcast_db.getTorrentFromChannelId(channel_id, infohash, ['ChannelTorrents.dispersy_id'])
             else:
-                torrent = self._torrent_db.getTorrent(infohash, ['dispersy_id', 'torrent_file_name'], include_mypref=False)
+                torrent = self._torrent_db.getTorrent(infohash, ['dispersy_id'], include_mypref=False)
                 if torrent:
                     dispersy_id = torrent['dispersy_id']
 
                     # 2. if still not found, create a new torrentmessage and return this one
-                    if not dispersy_id and torrent['torrent_file_name'] and path.isfile(torrent['torrent_file_name']):
-                        message = self.create_torrent(torrent['torrent_file_name'], store=True, update=False, forward=False)
+                    if not dispersy_id:
+                        message = self.create_torrent(infohash, store=True, update=False, forward=False)
                         if message:
                             packets.append(message.packet)
             add_packet(dispersy_id)

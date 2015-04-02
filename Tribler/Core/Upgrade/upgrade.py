@@ -4,8 +4,8 @@ import shutil
 
 from twisted.internet.defer import inlineCallbacks
 
-from Tribler.Core.CacheDB.db_versions import LATEST_DB_VERSION
-from Tribler.Core.Upgrade.db_upgrader import DBUpgrader
+from Tribler.Core.CacheDB.db_versions import LATEST_DB_VERSION, LOWEST_SUPPORTED_DB_VERSION
+from Tribler.Core.Upgrade.db_upgrader import DBUpgrader, VersionNoLongerSupportedError
 from Tribler.Core.Upgrade.torrent_upgrade65 import TorrentMigrator65
 from Tribler.Core.torrentstore import TorrentStore
 from Tribler.dispersy.util import call_on_reactor_thread
@@ -43,6 +43,10 @@ class TriblerUpgrader(object):
             self.current_status = msg
             self._logger.info(msg)
             self.failed = True
+        elif self.db.version < LOWEST_SUPPORTED_DB_VERSION:
+            msg = u"Database is too old %s < %s" % (self.db.version, LOWEST_SUPPORTED_DB_VERSION)
+            self.current_status = msg
+            self.failed = True
         elif self.db.version == LATEST_DB_VERSION:
             self._logger.info(u"tribler is in the latest version, no need to upgrade")
             self.failed = False
@@ -50,10 +54,12 @@ class TriblerUpgrader(object):
             # upgrade
             try:
                 torrent_store = TorrentStore(self.session.get_torrent_store_dir())
-                torrent_migrator = TorrentMigrator65(self.session, self.db, torrent_store=torrent_store, status_update_func=self.update_status)
+                torrent_migrator = TorrentMigrator65(
+                    self.session, self.db, torrent_store=torrent_store, status_update_func=self.update_status)
                 yield torrent_migrator.start_migrate()
 
-                db_migrator = DBUpgrader(self.session, self.db, torrent_store=torrent_store, status_update_func=self.update_status)
+                db_migrator = DBUpgrader(
+                    self.session, self.db, torrent_store=torrent_store, status_update_func=self.update_status)
                 yield db_migrator.start_migrate()
 
                 # Import all the torrent files not in the database, we do this in

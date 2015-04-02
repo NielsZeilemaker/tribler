@@ -5,26 +5,18 @@
 
 import sys
 import os
-from hashlib import md5
-import zlib
 import logging
-
-from Tribler.Core.Utilities.Crypto import sha
+from hashlib import sha1
 from copy import copy
 from time import time
-from traceback import print_exc
 from types import LongType
+from libtorrent import bencode
 
-from Tribler.Core.Utilities.bencode import bencode
-from Tribler.Core.Merkle.merkle import MerkleTree
 from Tribler.Core.Utilities.unicode import bin2unicode
-from Tribler.Core.APIImplementation.miscutils import parse_playtime_to_secs, offset2piece
+from Tribler.Core.APIImplementation.miscutils import offset2piece
 from Tribler.Core.osutils import fix_filebasename
 from Tribler.Core.defaults import tdefdictdefaults
 from Tribler.Core.Utilities.utilities import validTorrentFile
-
-
-ignore = []  # Arno: was ['core', 'CVS']
 
 logger = logging.getLogger(__name__)
 
@@ -54,63 +46,14 @@ def make_torrent_file(input, userabortflag=None, userprogresscallback=lambda x: 
             if key == 'comment':
                 metainfo['comment.utf-8'] = uniconvert(input['comment'], 'utf-8')
 
-    # Assuming 1 file, Azureus format no support multi-file torrent with diff
-    # bitrates
-    bitrate = None
-    for file in input['files']:
-        if file['playtime'] is not None:
-            secs = parse_playtime_to_secs(file['playtime'])
-            bitrate = file['length'] / secs
-            break
-        if input.get('bps') is not None:
-            bitrate = input['bps']
-            break
-
-    if bitrate is not None or input['thumb'] is not None:
-        mdict = {'Publisher': 'Tribler'}
-        if input['comment'] is None:
-            descr = ''
-        else:
-            descr = input['comment']
-        mdict['Description'] = descr
-
-        if bitrate is not None:
-            mdict['Progressive'] = 1
-            mdict['Speed Bps'] = int(bitrate)  # bencode fails for float
-        else:
-            mdict['Progressive'] = 0
-
-        mdict['Title'] = metainfo['info']['name']
-        mdict['Creation Date'] = long(time())
-        # Azureus client source code doesn't tell what this is, so just put in random value from real torrent
-        mdict['Content Hash'] = 'PT3GQCPW4NPT6WRKKT25IQD4MU5HM4UY'
-        mdict['Revision Date'] = long(time())
-        if input['thumb'] is not None:
-            mdict['Thumbnail'] = input['thumb']
-        cdict = {'Content': mdict}
-        metainfo['azureus_properties'] = cdict
-
-    if 'url-compat' in input:
-        metainfo['info']['url-compat'] = input['url-compat']
     if 'private' in input:
         metainfo['info']['private'] = input['private']
     if 'anonymous' in input:
         metainfo['info']['anonymous'] = input['anonymous']
 
-    # Arno, 2010-03-02:
-    # Theoretically should go into 'info' field, to get infohash protection
-    # because the video won't play without them. In the future we'll sign
-    # the whole .torrent IMHO so it won't matter. Keeping it out of 'info'
-    # at the moment makes the .tstream files more stable (in case you restart
-    # the live source, and the Ogg header generated contains some date or
-    # what not, we'd need a new .tstream to be distributed to all.
-    #
-    if 'ogg-headers' in input:
-        metainfo['ogg-headers'] = input['ogg-headers']
-
     # Two places where infohash calculated, here and in TorrentDef.
     # Elsewhere: must use TorrentDef.get_infohash() to allow P2PURLs.
-    infohash = sha(bencode(info)).digest()
+    infohash = sha1(bencode(info)).digest()
     return infohash, metainfo
 
 
@@ -143,7 +86,7 @@ def makeinfo(input, userabortflag, userprogresscallback):
     encoding = input['encoding']
 
     pieces = []
-    sh = sha()
+    sh = sha1()
     done = 0
     fs = []
     totalsize = 0
@@ -172,109 +115,68 @@ def makeinfo(input, userabortflag, userprogresscallback):
     # 2. Calc total size
     newsubs = []
     for p, f in subs:
-        if 'live' in input:
-            size = input['files'][0]['length']
-        else:
-            size = os.path.getsize(f)
+        size = os.path.getsize(f)
         totalsize += size
         newsubs.append((p, f, size))
     subs = newsubs
 
     # 3. Calc piece length from totalsize if not set
     if input['piece length'] == 0:
-        if input['createmerkletorrent']:
-            # used to be 15=32K, but this works better with slow python
-            piece_length = 2 ** 18
-        else:
-            # Niels we want roughly between 1000-2000 pieces
-            # This results in the following logic:
+        # Niels we want roughly between 1000-2000 pieces
+        # This results in the following logic:
 
-            # We start with 32K pieces
-            piece_length = 2 ** 15
+        # We start with 32K pieces
+        piece_length = 2 ** 15
 
-            while totalsize / piece_length > 2000:
-                # too many piece, double piece_size
-                piece_length *= 2
+        while totalsize / piece_length > 2000:
+            # too many piece, double piece_size
+            piece_length *= 2
     else:
         piece_length = input['piece length']
 
-    # 4. Read files and calc hashes, if not live
-    if 'live' not in input:
-        for p, f, size in subs:
-            pos = 0
+    # 4. Read files and calc hashes
+    for p, f, size in subs:
+        pos = 0
 
-            h = open(f, 'rb')
+        h = open(f, 'rb')
 
-            if input['makehash_md5']:
-                hash_md5 = md5.new()
-            if input['makehash_sha1']:
-                hash_sha1 = sha()
-            if input['makehash_crc32']:
-                hash_crc32 = zlib.crc32('')
+        while pos < size:
+            a = min(size - pos, piece_length - done)
 
-            while pos < size:
-                a = min(size - pos, piece_length - done)
+            # See if the user cancelled
+            if userabortflag is not None and userabortflag.isSet():
+                return None, None
 
-                # See if the user cancelled
-                if userabortflag is not None and userabortflag.isSet():
-                    return None, None
+            readpiece = h.read(a)
 
-                readpiece = h.read(a)
+            # See if the user cancelled
+            if userabortflag is not None and userabortflag.isSet():
+                return None, None
 
-                # See if the user cancelled
-                if userabortflag is not None and userabortflag.isSet():
-                    return None, None
+            sh.update(readpiece)
 
-                sh.update(readpiece)
+            done += a
+            pos += a
+            totalhashed += a
 
-                if input['makehash_md5']:
-                    # Update MD5
-                    hash_md5.update(readpiece)
+            if done == piece_length:
+                pieces.append(sh.digest())
+                done = 0
+                sh = sha1()
 
-                if input['makehash_crc32']:
-                    # Update CRC32
-                    hash_crc32 = zlib.crc32(readpiece, hash_crc32)
+            if userprogresscallback is not None:
+                userprogresscallback(float(totalhashed) / float(totalsize))
 
-                if input['makehash_sha1']:
-                    # Update SHA1
-                    hash_sha1.update(readpiece)
+        newdict = {'length': num2num(size),
+                   'path': uniconvertl(p, encoding),
+                   'path.utf-8': uniconvertl(p, 'utf-8')}
 
-                done += a
-                pos += a
-                totalhashed += a
+        fs.append(newdict)
 
-                if done == piece_length:
-                    pieces.append(sh.digest())
-                    done = 0
-                    sh = sha()
+        h.close()
 
-                if userprogresscallback is not None:
-                    userprogresscallback(float(totalhashed) / float(totalsize))
-
-            newdict = {'length': num2num(size),
-                       'path': uniconvertl(p, encoding),
-                       'path.utf-8': uniconvertl(p, 'utf-8')}
-
-            # Find and add playtime
-            for file in input['files']:
-                if file['inpath'] == f:
-                    if file['playtime'] is not None:
-                        newdict['playtime'] = file['playtime']
-                    break
-
-            if input['makehash_md5']:
-                newdict['md5sum'] = hash_md5.hexdigest()
-            if input['makehash_crc32']:
-                newdict['crc32'] = "%08X" % hash_crc32
-            if input['makehash_sha1']:
-                newdict['sha1'] = hash_sha1.digest()
-
-            fs.append(newdict)
-
-            h.close()
-
-        if done > 0:
-            pieces.append(sh.digest())
+    if done > 0:
+        pieces.append(sh.digest())
 
     # 5. Create info dict
     if len(subs) == 1:
@@ -297,32 +199,7 @@ def makeinfo(input, userabortflag, userprogresscallback):
                 'name': uniconvert(name, encoding),
                 'name.utf-8': uniconvert(name, 'utf-8')}
 
-    if 'live' not in input:
-        if input['createmerkletorrent']:
-            merkletree = MerkleTree(piece_length, totalsize, None, pieces)
-            root_hash = merkletree.get_root_hash()
-            infodict.update({'root hash': root_hash})
-        else:
-            infodict.update({'pieces': ''.join(pieces)})
-    else:
-        # With source auth, live is a dict
-        infodict['live'] = input['live']
-
-    if 'cs_keys' in input:
-        # This is a closed swarm - add torrent keys
-        infodict['cs_keys'] = input['cs_keys']
-
-    if 'ns-metadata' in input:
-        # This has P2P-Next metadata, store in info field to make it
-        # immutable.
-        infodict['ns-metadata'] = input['ns-metadata']
-
-    if len(subs) == 1:
-        # Find and add playtime
-        for file in input['files']:
-            if file['inpath'] == f:
-                if file['playtime'] is not None:
-                    infodict['playtime'] = file['playtime']
+    infodict.update({'pieces': ''.join(pieces)})
 
     return infodict, piece_length
 
@@ -336,7 +213,7 @@ def subfiles(d):
         p, n = stack.pop()
         if os.path.isdir(n):
             for s in os.listdir(n):
-                if s not in ignore and s[:1] != '.':
+                if s[:1] != '.':
                     stack.append((copy(p) + [s], os.path.join(n, s)))
         else:
             r.append((p, n))
@@ -384,62 +261,6 @@ def num2num(num):
         return int(num)
     else:
         return num
-
-
-def get_bitrate_from_metainfo(file, metainfo):
-    info = metainfo['info']
-    if file is None or 'files' not in info:  # if no file is specified or this is a single file torrent
-        bitrate = None
-        try:
-            playtime = None
-            if 'playtime' in info:
-                playtime = parse_playtime_to_secs(info['playtime'])
-            elif 'playtime' in metainfo:  # HACK: encode playtime in non-info part of existing torrent
-                playtime = parse_playtime_to_secs(metainfo['playtime'])
-            elif 'azureus_properties' in metainfo:
-                azprop = metainfo['azureus_properties']
-                if 'Content' in azprop:
-                    content = metainfo['azureus_properties']['Content']
-                    if 'Speed Bps' in content:
-                        bitrate = float(content['Speed Bps'])
-            if playtime is not None:
-                bitrate = info['length'] / playtime
-                logger.debug("TorrentDef: get_bitrate: Found bitrate %s", bitrate)
-        except:
-            print_exc()
-
-        return bitrate
-
-    else:
-        for i in range(len(info['files'])):
-            x = info['files'][i]
-
-            intorrentpath = ''
-            for elem in x['path']:
-                intorrentpath = os.path.join(intorrentpath, elem)
-            bitrate = None
-            try:
-                playtime = None
-                if 'playtime' in x:
-                    playtime = parse_playtime_to_secs(x['playtime'])
-                elif 'playtime' in metainfo:  # HACK: encode playtime in non-info part of existing torrent
-                    playtime = parse_playtime_to_secs(metainfo['playtime'])
-                elif 'azureus_properties' in metainfo:
-                    azprop = metainfo['azureus_properties']
-                    if 'Content' in azprop:
-                        content = metainfo['azureus_properties']['Content']
-                        if 'Speed Bps' in content:
-                            bitrate = float(content['Speed Bps'])
-
-                if playtime is not None:
-                    bitrate = x['length'] / playtime
-            except:
-                print_exc()
-
-            if intorrentpath == file:
-                return bitrate
-
-        raise ValueError("File not found in torrent")
 
 
 def get_length_from_metainfo(metainfo, selectedfiles):
@@ -496,7 +317,7 @@ def copy_metainfo_to_input(metainfo, input):
         if key in metainfo:
             input[key] = metainfo[key]
 
-    infokeys = ['name', 'piece length', 'live', 'url-compat']
+    infokeys = ['name', 'piece length']
     for key in infokeys:
         if key in metainfo['info']:
             input[key] = metainfo['info'][key]
@@ -504,46 +325,16 @@ def copy_metainfo_to_input(metainfo, input):
     # Note: don't know inpath, set to outpath
     if 'length' in metainfo['info']:
         outpath = metainfo['info']['name']
-        if 'playtime' in metainfo['info']:
-            playtime = metainfo['info']['playtime']
-        else:
-            playtime = None
         length = metainfo['info']['length']
-        d = {'inpath': outpath, 'outpath': outpath, 'playtime': playtime, 'length': length}
+        d = {'inpath': outpath, 'outpath': outpath, 'length': length}
         input['files'].append(d)
     else:  # multi-file torrent
         files = metainfo['info']['files']
         for file in files:
             outpath = pathlist2filename(file['path'])
-            if 'playtime' in file:
-                playtime = file['playtime']
-            else:
-                playtime = None
             length = file['length']
-            d = {'inpath': outpath, 'outpath': outpath, 'playtime': playtime, 'length': length}
+            d = {'inpath': outpath, 'outpath': outpath, 'length': length}
             input['files'].append(d)
-
-    if 'azureus_properties' in metainfo:
-        azprop = metainfo['azureus_properties']
-        if 'Content' in azprop:
-            content = metainfo['azureus_properties']['Content']
-            if 'Thumbnail' in content:
-                input['thumb'] = content['Thumbnail']
-
-    if 'live' in metainfo['info']:
-        input['live'] = metainfo['info']['live']
-
-    if 'cs_keys' in metainfo['info']:
-        input['cs_keys'] = metainfo['info']['cs_keys']
-
-    if 'url-compat' in metainfo['info']:
-        input['url-compat'] = metainfo['info']['url-compat']
-
-    if 'ogg-headers' in metainfo:
-        input['ogg-headers'] = metainfo['ogg-headers']
-
-    if 'ns-metadata' in metainfo['info']:
-        input['ns-metadata'] = metainfo['info']['ns-metadata']
 
     # Diego : we want web seeding
     if 'url-list' in metainfo:

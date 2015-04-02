@@ -3,12 +3,13 @@
 import unittest
 import os
 from time import time
-
 import binascii
 
 from Tribler.Core.simpledefs import DOWNLOAD
 from Tribler.Test.test_as_server import TestGuiAsServer, BASE_DIR
 
+TORRENT_R = r'http://torrent.fedoraproject.org/torrents/Fedora-Live-Workstation-x86_64-21.torrent'
+TORRENT_INFOHASH = binascii.unhexlify('89f0835dc2def218ec4bac73da6be6b8c20534ea')
 
 class TestLibtorrentDownload(TestGuiAsServer):
 
@@ -20,37 +21,44 @@ class TestLibtorrentDownload(TestGuiAsServer):
             self.quit()
 
         def item_shown_in_list():
-            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
+            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(
+                infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
 
         def download_object_ready():
-            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(infohash), item_shown_in_list, 'no download in librarylist')
+            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(
+                infohash), item_shown_in_list, 'no download in librarylist')
 
         def do_downloadfromfile():
             self.guiUtility.showLibrary()
-            self.frame.startDownload(os.path.join(BASE_DIR, "data", "Pioneer.One.S01E06.720p.x264-VODO.torrent"), self.getDestDir())
+            self.frame.startDownload(
+                os.path.join(BASE_DIR, "data", "Pioneer.One.S01E06.720p.x264-VODO.torrent"), self.getDestDir())
 
-            self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready)
+            self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready,
+                                 'do_downloadfromfile() failed')
 
         self.startTest(do_downloadfromfile)
 
     def test_downloadfromurl(self):
-        infohash = binascii.unhexlify('8C3760CB651C863861FA9ABE2EF70246943C1994')
+        infohash = TORRENT_INFOHASH
 
         def make_screenshot():
             self.screenshot('After starting a libtorrent download from url')
             self.quit()
 
         def item_shown_in_list():
-            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
+            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(
+                infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
 
         def download_object_ready():
-            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(infohash), item_shown_in_list, 'no download in librarylist')
+            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(
+                infohash), item_shown_in_list, 'no download in librarylist')
 
         def do_downloadfromurl():
             self.guiUtility.showLibrary()
-            self.frame.startDownloadFromUrl(r'http://torrent.fedoraproject.org/torrents/Fedora-Live-Desktop-x86_64-19.torrent', self.getDestDir())
+            self.frame.startDownloadFromUrl(TORRENT_R, self.getDestDir())
 
-            self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready)
+            self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready,
+                                 'do_downloadfromurl() failed')
 
         self.startTest(do_downloadfromurl)
 
@@ -62,21 +70,25 @@ class TestLibtorrentDownload(TestGuiAsServer):
             self.quit()
 
         def item_shown_in_list():
-            self.CallConditional(60, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
+            self.CallConditional(60, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(
+                infohash).original_data.ds.get_current_speed(DOWNLOAD) > 0, make_screenshot, 'no download progress')
 
         def download_object_ready():
-            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(infohash), item_shown_in_list, 'no download in librarylist')
+            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(
+                infohash), item_shown_in_list, 'no download in librarylist')
 
         def do_downloadfrommagnet():
             self.guiUtility.showLibrary()
-            self.frame.startDownloadFromMagnet(r'magnet:?xt=urn:btih:5ac55cf1b935291f6fc92ad7afd34597498ff2f7&dn=Pioneer+One+S01E01+Xvid-VODO&title=', self.getDestDir())
+            self.frame.startDownloadFromMagnet(
+                r'magnet:?xt=urn:btih:5ac55cf1b935291f6fc92ad7afd34597498ff2f7&dn=Pioneer+One+S01E01+Xvid-VODO&title=', self.getDestDir())
 
-            self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready)
+            self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready,
+                                 'do_downloadfrommagnet() failed')
 
         self.startTest(do_downloadfrommagnet)
 
     def test_stopresumedelete(self):
-        infohash = binascii.unhexlify('8C3760CB651C863861FA9ABE2EF70246943C1994')
+        infohash = TORRENT_INFOHASH
 
         def do_final():
             self.screenshot('After deleting a libtorrent download')
@@ -87,32 +99,38 @@ class TestLibtorrentDownload(TestGuiAsServer):
 
             self.frame.librarylist.list.Select(infohash)
             self.frame.top_bg.OnDelete(silent=True)
-            self.CallConditional(10, lambda: not self.frame.librarylist.list.HasItem(infohash), lambda: self.Call(1, do_final), 'download not deleted')
+            self.CallConditional(10, lambda: not self.frame.librarylist.list.HasItem(
+                infohash), lambda: self.Call(1, do_final), 'download not deleted')
 
         def do_resume():
             self.screenshot('After stopping a libtorrent download')
 
             self.frame.librarylist.list.Select(infohash)
             self.frame.top_bg.OnResume()
-            self.CallConditional(10, lambda: 'stopped' not in self.frame.librarylist.list.GetItem(infohash).original_data.state, do_deletedownload, 'download not resumed')
+            self.CallConditional(10, lambda: 'stopped' not in self.frame.librarylist.list.GetItem(
+                infohash).original_data.state, do_deletedownload, 'download not resumed')
 
         def do_stop():
             self.screenshot('After starting a libtorrent download')
 
             self.frame.librarylist.list.Select(infohash)
             self.frame.top_bg.OnStop()
-            self.CallConditional(10, lambda : 'stopped' in self.frame.librarylist.list.GetItem(infohash).original_data.state, do_resume, 'download not stopped')
+            self.CallConditional(10, lambda: 'stopped' in self.frame.librarylist.list.GetItem(
+                infohash).original_data.state, do_resume, 'download not stopped')
 
         def item_shown_in_list():
-            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(infohash).original_data.ds.progress > 0, do_stop, 'no download progress')
+            self.CallConditional(30, lambda: self.frame.librarylist.list.GetItem(infohash).original_data.ds and self.frame.librarylist.list.GetItem(
+                infohash).original_data.ds.progress > 0, do_stop, 'no download progress')
 
         def download_object_ready():
-            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(infohash), item_shown_in_list, 'no download in librarylist')
+            self.CallConditional(10, lambda: self.frame.librarylist.list.HasItem(
+                infohash), item_shown_in_list, 'no download in librarylist')
 
         def do_start():
             self.guiUtility.showLibrary()
-            self.frame.startDownloadFromUrl(r'http://torrent.fedoraproject.org/torrents/Fedora-Live-Desktop-x86_64-19.torrent', self.getDestDir())
-            self.CallConditional(60, lambda: self.session.get_download(infohash), download_object_ready)
+            self.frame.startDownloadFromUrl(TORRENT_R, self.getDestDir())
+            self.CallConditional(60, lambda: self.session.get_download(infohash), download_object_ready,
+                                 'do_start() failed')
 
         self.startTest(do_start)
 
@@ -124,12 +142,11 @@ class TestLibtorrentDownload(TestGuiAsServer):
             self.quit()
 
         def check_playlist():
-            from Tribler.Core.Video.VideoPlayer import VideoPlayer
             from Tribler.Core.Video.utils import videoextdefaults
 
             buffer_complete = time()
 
-            d = VideoPlayer.getInstance().get_vod_download()
+            d = self.guiUtility.videoplayer.get_vod_download()
             videofiles = []
             for filename in d.get_def().get_files():
                 _, ext = os.path.splitext(filename)
@@ -141,28 +158,28 @@ class TestLibtorrentDownload(TestGuiAsServer):
             playlist = self.guiUtility.frame.actlist.expandedPanel_videoplayer
 
             do_check = lambda: len(playlist.links) == len(videofiles) and \
-                playlist.tdef.get_infohash() == VideoPlayer.getInstance().get_vod_download().get_def().get_infohash() and \
-                playlist.fileindex == VideoPlayer.getInstance().get_vod_fileindex()
+                playlist.tdef.get_infohash() == self.guiUtility.videoplayer.get_vod_download().get_def().get_infohash() and \
+                playlist.fileindex == self.guiUtility.videoplayer.get_vod_fileindex()
 
-            self.CallConditional(10, do_check, lambda: self.Call(5, lambda: take_screenshot(buffer_complete)), "playlist set incorrectly")
+            self.CallConditional(10, do_check, lambda: self.Call(
+                5, lambda: take_screenshot(buffer_complete)), "playlist set incorrectly")
 
         def do_monitor():
-            from Tribler.Core.Video.VideoPlayer import VideoPlayer
-
             self.screenshot('After starting a VOD download')
-            self.CallConditional(60, lambda: VideoPlayer.getInstance().vod_playing, check_playlist, "streaming did not start")
+            self.CallConditional(60, lambda: self.guiUtility.videoplayer
+                                 .vod_playing, check_playlist, "streaming did not start")
 
         def do_vod():
-            from Tribler.Core.Video.VideoPlayer import VideoPlayer
-
             ds = self.frame.startDownload(os.path.join(BASE_DIR, "data", "Pioneer.One.S01E06.720p.x264-VODO.torrent"),
                                           self.getDestDir(),
-                                          selectedFiles=[os.path.join('Sample', 'Pioneer.One.S01E06.720p.x264.Sample-VODO.mkv')],
+                                          selectedFiles=[
+                                              os.path.join('Sample', 'Pioneer.One.S01E06.720p.x264.Sample-VODO.mkv')],
                                           vodmode=True)
             # set the max prebuffsize to be smaller so that the unit test runs faster
             ds.max_prebuffsize = 16 * 1024
             self.guiUtility.ShowPlayer()
-            self.CallConditional(30, lambda: VideoPlayer.getInstance().get_vod_download(), do_monitor, "VOD download not found")
+            self.CallConditional(30, lambda: self.guiUtility.videoplayer
+                                 .get_vod_download(), do_monitor, "VOD download not found")
 
         self.startTest(do_vod)
 

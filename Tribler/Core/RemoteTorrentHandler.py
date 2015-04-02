@@ -20,7 +20,6 @@ from Tribler.dispersy.util import call_on_reactor_thread
 
 from Tribler.Core.TorrentDef import TorrentDef
 from Tribler.Core.simpledefs import NTFY_TORRENTS, INFOHASH_LENGTH
-from Tribler.Core.torrentstore import TorrentStore
 
 TORRENT_OVERFLOW_CHECKING_INTERVAL = 30 * 60
 LOW_PRIO_COLLECTING = 0
@@ -30,11 +29,7 @@ MAX_PRIORITY = 1
 
 class RemoteTorrentHandler(TaskManager):
 
-    __single = None
-
-    def __init__(self):
-        RemoteTorrentHandler.__single = self
-
+    def __init__(self, session):
         super(RemoteTorrentHandler, self).__init__()
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -48,31 +43,19 @@ class RemoteTorrentHandler(TaskManager):
 
         self.num_torrents = 0
 
-        self.session = None
+        self.session = session
         self.dispersy = None
         self.max_num_torrents = 0
         self.tor_col_dir = None
         self.torrent_db = None
 
-    def getInstance(*args, **kw):
-        if RemoteTorrentHandler.__single is None:
-            RemoteTorrentHandler(*args, **kw)
-        return RemoteTorrentHandler.__single
-    getInstance = staticmethod(getInstance)
-
-    def delInstance(*args, **kw):
-        RemoteTorrentHandler.__single = None
-    delInstance = staticmethod(delInstance)
-
-    def register(self, dispersy, session, max_num_torrents):
-        self.session = session
-        self.dispersy = dispersy
-        self.max_num_torrents = max_num_torrents
-        self.tor_col_dir = self.session.get_torrent_collecting_dir()
+    def initialize(self):
+        self.dispersy = self.session.get_dispersy_instance()
+        self.max_num_torrents = self.session.get_torrent_collecting_max_torrents()
 
         self.torrent_db = None
         if self.session.get_megacache():
-            self.torrent_db = session.open_dbhandler(NTFY_TORRENTS)
+            self.torrent_db = self.session.open_dbhandler(NTFY_TORRENTS)
             self.__check_overflow()
 
         for priority in (0, 1):
@@ -130,7 +113,7 @@ class RemoteTorrentHandler(TaskManager):
         # fix prio levels to 1 and 0
         priority = min(priority, 1)
 
-        # # we use DHT if we don't have candidate
+        # we use DHT if we don't have candidate
         if candidate:
             self.torrent_requesters[priority].add_request(infohash, candidate, timeout)
         else:
@@ -145,7 +128,7 @@ class RemoteTorrentHandler(TaskManager):
         infohash = tdef.get_infohash()
         infohash_str = hexlify(infohash)
 
-        if self.session.lm.torrent_store == None:
+        if self.session.lm.torrent_store is None:
             self._logger.error("Torrent store is not loaded")
             return
 
@@ -167,17 +150,16 @@ class RemoteTorrentHandler(TaskManager):
 
             # add torrent to database
             if self.torrent_db.hasTorrent(infohash):
-                self.torrent_db.updateTorrent(infohash, torrent_file_name="lvl")
+                self.torrent_db.updateTorrent(infohash, is_collected=1)
             else:
-                self.torrent_db.addExternalTorrent(tdef, extra_info={u"filename": "lvl", u"status": u"good"})
+                self.torrent_db.addExternalTorrent(tdef, extra_info={u"is_collected": 1, u"status": u"good"})
 
         if callback:
             # TODO(emilon): should we catch exceptions from the callback?
             callback()
 
-        # TODO(emilon): remove all the torrent_file_name references in the callback chain
         # notify all
-        self.notify_possible_torrent_infohash(infohash, infohash_str)
+        self.notify_possible_torrent_infohash(infohash)
 
     @call_on_reactor_thread
     def download_torrentmessage(self, candidate, infohash, user_callback=None, priority=1):
@@ -239,13 +221,12 @@ class RemoteTorrentHandler(TaskManager):
 
         self.notify_possible_metadata_infohash(infohash, thumbnail_subpath)
 
-    # TODO(emilon): HERE
-    def notify_possible_torrent_infohash(self, infohash, torrent_file_name=None):
+    def notify_possible_torrent_infohash(self, infohash):
         if infohash not in self.torrent_callbacks:
             return
 
         for callback in self.torrent_callbacks[infohash]:
-            self.session.uch.perform_usercallback(lambda ucb=callback, f=torrent_file_name: ucb(f))
+            self.session.uch.perform_usercallback(lambda ucb=callback, ih=hexlify(infohash): ucb(ih))
 
         del self.torrent_callbacks[infohash]
 
@@ -283,7 +264,8 @@ class RemoteTorrentHandler(TaskManager):
             total_requests = pending_requests + success + failed
 
             return "%s: %d/%d" % (qname, success, total_requests),\
-                   "%s: pending %d, success %d, failed %d, total %d" % (qname, pending_requests, success, failed, total_requests)
+                   "%s: pending %d, success %d, failed %d, total %d" % (
+                       qname, pending_requests, success, failed, total_requests)
         return [(qstring, qtooltip) for qstring, qtooltip in [getQueueSuccess("TFTP", self.torrent_requesters),
                                                               getQueueSuccess("DHT", self.magnet_requesters),
                                                               getQueueSuccess("Msg", self.torrent_message_requesters)] if qstring]
@@ -474,7 +456,7 @@ class MagnetRequester(Requester):
             self._logger.debug(u"requesting %s priority %s through magnet link %s",
                                infohash_str, self._priority, magnetlink)
 
-            TorrentDef.retrieve_from_magnet(magnetlink, self._success_callback, timeout=self.TIMEOUT,
+            TorrentDef.retrieve_from_magnet(self._session, magnetlink, self._success_callback, timeout=self.TIMEOUT,
                                             timeout_callback=self._failure_callback, silent=True)
             self._running_requests.append(infohash)
 
@@ -574,7 +556,7 @@ class TftpRequester(Requester):
         if thumbnail_subpath:
             file_name = thumbnail_subpath
         else:
-            file_name = hexlify(infohash)+'.torrent'
+            file_name = hexlify(infohash) + '.torrent'
 
         extra_info = {u"infohash": infohash, u"thumbnail_subpath": thumbnail_subpath}
         # do not download if TFTP has been shutdown

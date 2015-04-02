@@ -15,12 +15,12 @@ import wx.lib.masked.textctrl
 from Tribler.Core.Session import Session
 from Tribler.Core.SessionConfig import SessionStartupConfig
 from Tribler.Core.osutils import get_picture_dir
-from Tribler.Core.simpledefs import UPLOAD, DOWNLOAD, STATEDIR_TORRENTCOLL_DIR
+from Tribler.Core.simpledefs import UPLOAD, DOWNLOAD
 from Tribler.Core.DownloadConfig import get_default_dscfg_filename
 from Tribler.Main.globals import DefaultDownloadStartupConfig
 from Tribler.Main.vwxGUI.GuiImageManager import GuiImageManager, data2wxBitmap, ICON_MAX_DIM
 from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
-from Tribler.Main.vwxGUI.validator import DirectoryValidator, NetworkSpeedValidator,NumberValidator
+from Tribler.Main.vwxGUI.validator import DirectoryValidator, NetworkSpeedValidator, NumberValidator
 from Tribler.Main.vwxGUI.widgets import _set_font, EditText, AnonymousSlidebar
 
 
@@ -274,8 +274,10 @@ class SettingsDialog(wx.Dialog):
         # Proxy settings
         old_ptype, old_server, old_auth = self.utility.session.get_libtorrent_proxy_settings()
         new_ptype = self._lt_proxytype.GetSelection()
-        new_server = (self._lt_proxyserver.GetValue(), int(self._lt_proxyport.GetValue())) if self._lt_proxyserver.GetValue() and self._lt_proxyport.GetValue() else None
-        new_auth = (self._lt_proxyusername.GetValue(), self._lt_proxypassword.GetValue()) if self._lt_proxyusername.GetValue() and self._lt_proxypassword.GetValue() else None
+        new_server = (self._lt_proxyserver.GetValue(), int(self._lt_proxyport.GetValue())
+                      ) if self._lt_proxyserver.GetValue() and self._lt_proxyport.GetValue() else None
+        new_auth = (self._lt_proxyusername.GetValue(), self._lt_proxypassword.GetValue()
+                    ) if self._lt_proxyusername.GetValue() and self._lt_proxypassword.GetValue() else None
         if old_ptype != new_ptype or old_server != new_server or old_auth != new_auth:
             self.utility.session.set_libtorrent_proxy_settings(new_ptype, new_server, new_auth)
             scfg.set_libtorrent_proxy_settings(new_ptype, new_server, new_auth)
@@ -290,7 +292,9 @@ class SettingsDialog(wx.Dialog):
         self.utility.flush_config()
 
         if restart:
-            dlg = wx.MessageDialog(self, "A restart is required for these changes to take effect.\nDo you want to restart Tribler now?", "Restart required", wx.ICON_QUESTION | wx.YES_NO | wx.YES_DEFAULT)
+            dlg = wx.MessageDialog(
+                self, "A restart is required for these changes to take effect.\nDo you want to restart Tribler now?",
+                                   "Restart required", wx.ICON_QUESTION | wx.YES_NO | wx.YES_DEFAULT)
             result = dlg.ShowModal()
             dlg.Destroy()
             if result == wx.ID_YES:
@@ -345,14 +349,7 @@ class SettingsDialog(wx.Dialog):
         self.defaultDLConfig.save(dlcfgfilename)
 
         # Save SessionStartupConfig
-        # Also change torrent collecting dir, which is by default in the default destdir
         cfgfilename = Session.get_default_config_filename(state_dir)
-        defaultdestdir = self.defaultDLConfig.get_dest_dir()
-        for target in [scfg, self.utility.session]:
-            try:
-                target.set_torrent_collecting_dir(os.path.join(defaultdestdir, STATEDIR_TORRENTCOLL_DIR))
-            except:
-                self._logger.exception("Could not set target torrent collecting dir")
 
         scfg.save(cfgfilename)
 
@@ -392,10 +389,6 @@ class SettingsDialog(wx.Dialog):
             wx.Yield()
         except:
             pass
-
-        # update db
-        self.guiUtility.torrentsearch_manager.torrent_db.updateTorrentDir(os.path.join(new_dir,
-                                                                                       'collected_torrent_files'))
 
         busyDlg.Destroy()
 
@@ -560,7 +553,7 @@ class SettingsDialog(wx.Dialog):
         # BitTorrent features
         cn_s3_sizer = create_subsection(conn_panel, cn_vsizer, "BitTorrent features", 1)
         self._enable_utp = wx.CheckBox(conn_panel, size=(200, -1),
-            label="Enable bandwidth management (uTP)")
+                                       label="Enable bandwidth management (uTP)")
         cn_s3_sizer.Add(self._enable_utp, 0, wx.EXPAND)
 
         self._lt_proxytype.Bind(wx.EVT_CHOICE, self.ProxyTypeChanged)
@@ -569,7 +562,8 @@ class SettingsDialog(wx.Dialog):
         if self.guiUtility.frame.SRstatusbar.IsReachable():
             self._firewall_status_text.SetLabel('Your network connection is working properly.')
         else:
-            self._firewall_status_text.SetLabel('Tribler has not yet received any incoming\nconnections. Unless you\'re using a proxy, this\ncould indicate a problem with your network\nconnection.')
+            self._firewall_status_text.SetLabel(
+                'Tribler has not yet received any incoming\nconnections. Unless you\'re using a proxy, this\ncould indicate a problem with your network\nconnection.')
         self._firewall_value.SetValue(str(self.utility.session.get_listen_port()))
         # uTP
         self._enable_utp.SetValue(self.utility.session.get_libtorrent_utp())
@@ -675,12 +669,13 @@ class SettingsDialog(wx.Dialog):
         sd_s2_sizer.Add(self._g2g2text)
 
         self._g2g3 = wx.RadioButton(seeding_panel,
-            label="No seeding")
+                                    label="No seeding")
         sd_s2_sizer.Add(self._g2g3, 0, wx.ALIGN_CENTER_VERTICAL)
 
         sd_vsizer.AddStretchSpacer(1)
 
-        sd_faq_text = wx.StaticText(seeding_panel, label="Why differ between 'normal' BitTorrent and Tribler-peers?\nBecause between Tribler-peers you will build up a reputation.\nThis is not the case for 'normal' BitTorrent-peers.")
+        sd_faq_text = wx.StaticText(
+            seeding_panel, label="Why differ between 'normal' BitTorrent and Tribler-peers?\nBecause between Tribler-peers you will build up a reputation.\nThis is not the case for 'normal' BitTorrent-peers.")
         sd_vsizer.Add(sd_faq_text)
 
         # other things
@@ -725,7 +720,8 @@ class SettingsDialog(wx.Dialog):
         self._webui_port.SetMinSize(wx.Size(150, -1))
         exp_s1_sizer.Add(self._webui_port)
 
-        exp_s1_faq_text = wx.StaticText(exp_panel, label="The Tribler webUI implements the same API as uTorrent.\nThus all uTorrent remotes are compatible with it.\n\nFurthermore, we additionally allow you to control Tribler\nusing your Browser. Go to http://localhost:PORT/gui to\nview your downloads in the browser.")
+        exp_s1_faq_text = wx.StaticText(
+            exp_panel, label="The Tribler webUI implements the same API as uTorrent.\nThus all uTorrent remotes are compatible with it.\n\nFurthermore, we additionally allow you to control Tribler\nusing your Browser. Go to http://localhost:PORT/gui to\nview your downloads in the browser.")
         exp_vsizer.Add(exp_s1_faq_text, 0, wx.EXPAND | wx.TOP, 10)
 
         # load values

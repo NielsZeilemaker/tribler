@@ -1,7 +1,9 @@
 # Written by Arno Bakker, Jie Yang
 # Improved and Modified by Niels Zeilemaker
 # see LICENSE.txt for license information
+import functools
 import gc
+import inspect
 import logging
 import os
 import re
@@ -18,11 +20,13 @@ wxversion.select("2.8-unicode")
 
 import wx
 
+from Tribler.dispersy.util import blocking_call_on_reactor_thread
+
 from Tribler.Core import defaults
 from Tribler.Core.Session import Session
 from Tribler.Core.SessionConfig import SessionStartupConfig
 from Tribler.Core.Utilities.twisted_thread import reactor
-
+from .util import process_unhandled_exceptions
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__))))
 STATE_DIR = os.path.join(BASE_DIR, u"_test_.Tribler")
@@ -41,7 +45,28 @@ DEBUG = False
 OUTPUT_DIR = os.environ.get('OUTPUT_DIR', 'output')
 
 
-class AbstractServer(unittest.TestCase):
+class BaseTestCase(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(BaseTestCase, self).__init__(*args, **kwargs)
+
+        def wrap(fun):
+            @functools.wraps(fun)
+            def check(*argv, **kwargs):
+                try:
+                    result = fun(*argv, **kwargs)
+                except:
+                    raise
+                else:
+                    process_unhandled_exceptions()
+                return result
+            return check
+
+        for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
+            if name.startswith("test_"):
+                setattr(self, name, wrap(method))
+
+
+class AbstractServer(BaseTestCase):
 
     _annotate_counter = 0
 
@@ -150,6 +175,8 @@ class TestAsServer(AbstractServer):
         self.config.set_dispersy(False)
         self.config.set_mainline_dht(False)
         self.config.set_torrent_store(False)
+        self.config.set_enable_torrent_search(False)
+        self.config.set_enable_channel_search(False)
         self.config.set_torrent_collecting(False)
         self.config.set_libtorrent(False)
         self.config.set_dht_torrent_collecting(False)
@@ -182,15 +209,38 @@ class TestAsServer(AbstractServer):
             diff = time.time() - session_shutdown_start
             assert diff < waittime, "test_as_server: took too long for Session to shutdown"
 
-            self._logger.debug("Waiting for Session to shutdown, will wait for an additional %d seconds", (waittime - diff))
+            self._logger.debug(
+                "Waiting for Session to shutdown, will wait for an additional %d seconds", (waittime - diff))
             time.sleep(1)
 
         self._logger.debug("Session has shut down")
 
-    def assert_(self, boolean, reason=None, do_assert=True):
+    def assert_(self, boolean, reason=None, do_assert=True, tribler_session=None, dump_statistics=False):
         if not boolean:
+            # print statistics if needed
+            if tribler_session and dump_statistics:
+                self._print_statistics(tribler_session.get_statistics())
+
             self.quit()
             assert boolean, reason
+
+    @blocking_call_on_reactor_thread
+    def _print_statistics(self, statistics_dict):
+        def _print_data_dict(data_dict, level):
+            for k, v in data_dict.iteritems():
+                indents = u'-' + u'-' * 2 * level
+
+                if isinstance(v, basestring):
+                    self._logger.debug(u"%s %s: %s", indents, k, v)
+                elif isinstance(v, dict):
+                    self._logger.debug(u"%s %s:", indents, k)
+                    _print_data_dict(v, level + 1)
+                else:
+                    # ignore other types for the moment
+                    continue
+        self._logger.debug(u"========== Tribler Statistics BEGIN ==========")
+        _print_data_dict(statistics_dict, 0)
+        self._logger.debug(u"========== Tribler Statistics END ==========")
 
     def startTest(self, callback):
         self.quitting = False
@@ -202,30 +252,42 @@ class TestAsServer(AbstractServer):
                 time.sleep(seconds)
             callback()
 
-    def CallConditional(self, timeout, condition, callback, assertMsg=None, assertCallback=None):
+    def CallConditional(self, timeout, condition, callback, assertMsg=None, assertCallback=None,
+                        tribler_session=None, dump_statistics=False):
         t = time.time()
 
         def DoCheck():
             if not self.quitting:
+                # only use the last two parts as the ID because the full name is too long
+                test_id = self.id()
+                test_id = '.'.join(test_id.split('.')[-2:])
+
                 if time.time() - t < timeout:
                     try:
                         if condition():
-                            self._logger.debug("condition satisfied after %d seconds, calling callback '%s'",
-                                               (time.time() - t), callback.__name__)
+                            self._logger.debug("%s - condition satisfied after %d seconds, calling callback '%s'",
+                                               test_id, time.time() - t, callback.__name__)
                             callback()
                         else:
                             self.Call(0.5, DoCheck)
 
                     except:
                         print_exc()
-                        self.assert_(False, 'Condition or callback raised an exception, quitting (%s)' % (assertMsg or "no-assert-msg"), do_assert=False)
+                        self.assert_(False, '%s - Condition or callback raised an exception, quitting (%s)' %
+                                     (test_id, assertMsg or "no-assert-msg"), do_assert=False)
                 else:
-                    self._logger.debug("%s, condition was not satisfied in %d seconds (%s)",
+                    self._logger.debug("%s - %s, condition was not satisfied in %d seconds (%s)",
+                                       test_id,
                                        ('calling callback' if assertCallback else 'quitting'),
-                                        timeout,
-                                        assertMsg or "no-assert-msg")
+                                       timeout,
+                                       assertMsg or "no-assert-msg")
                     assertcall = assertCallback if assertCallback else self.assert_
-                    assertcall(False, assertMsg if assertMsg else "Condition was not satisfied in %d seconds" % timeout, do_assert=False)
+                    kwargs = {}
+                    if assertcall == self.assert_:
+                        kwargs = {'tribler_session': tribler_session, 'dump_statistics': dump_statistics}
+
+                    assertcall(False, "%s - %s - Condition was not satisfied in %d seconds" %
+                               (test_id, assertMsg, timeout), do_assert=False, **kwargs)
         self.Call(0, DoCheck)
 
     def quit(self):
@@ -256,8 +318,12 @@ class TestGuiAsServer(TestAsServer):
         self.asserts = []
         self.annotate(self._testMethodName, start=True)
 
-    def assert_(self, boolean, reason, do_assert=True):
+    def assert_(self, boolean, reason, do_assert=True, tribler_session=None, dump_statistics=False):
         if not boolean:
+            # print statistics if needed
+            if tribler_session and dump_statistics:
+                self._print_statistics(tribler_session.get_statistics())
+
             self.screenshot("ASSERT: %s" % reason)
             self.quit()
 
@@ -266,7 +332,8 @@ class TestGuiAsServer(TestAsServer):
             if do_assert:
                 assert boolean, reason
 
-    def startTest(self, callback, min_timeout=5, autoload_discovery=True):
+    def startTest(self, callback, min_timeout=5, autoload_discovery=True,
+                  use_torrent_search=True, use_channel_search=True):
         from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
         from Tribler.Main import tribler_main
         tribler_main.ALLOW_MULTIPLE = True
@@ -309,7 +376,9 @@ class TestGuiAsServer(TestAsServer):
 
         # modify argv to let tribler think its running from a different directory
         sys.argv = [os.path.abspath('./.exe')]
-        tribler_main.run(autoload_discovery=autoload_discovery)
+        tribler_main.run(autoload_discovery=autoload_discovery,
+                         use_torrent_search=use_torrent_search,
+                         use_channel_search=use_channel_search)
 
         assert self.hadSession, 'Did not even create a session'
 

@@ -21,14 +21,6 @@ CREATE TABLE MetadataData (
 
 ----------------------------------------
 
-CREATE TABLE Category (
-  category_id    integer PRIMARY KEY NOT NULL,
-  name           text NOT NULL,
-  description    text
-);
-
-----------------------------------------
-
 CREATE TABLE MyInfo (
   entry  PRIMARY KEY,
   value  text
@@ -39,7 +31,6 @@ CREATE TABLE MyInfo (
 CREATE TABLE MyPreference (
   torrent_id     integer PRIMARY KEY NOT NULL,
   destination_path text NOT NULL,
-  progress       numeric,
   creation_time  integer NOT NULL
 );
 
@@ -62,20 +53,19 @@ CREATE TABLE Torrent (
   torrent_id       integer PRIMARY KEY AUTOINCREMENT NOT NULL,
   infohash		   text NOT NULL,
   name             text,
-  torrent_file_name text,
   length           integer,
   creation_date    integer,
   num_files        integer,
-  thumbnail        integer,
   insert_time      numeric,
   secret           integer,
   relevance        numeric DEFAULT 0,
-  category_id      integer,
-  status_id        integer DEFAULT 0,
+  category         text,
+  status           text DEFAULT 'unknown',
   num_seeders      integer,
   num_leechers     integer,
   comment          text,
   dispersy_id      integer,
+  is_collected     integer DEFAULT 0,
   last_tracker_check    integer DEFAULT 0,
   tracker_check_retries integer DEFAULT 0,
   next_tracker_check    integer DEFAULT 0
@@ -84,14 +74,6 @@ CREATE TABLE Torrent (
 CREATE UNIQUE INDEX infohash_idx
   ON Torrent
   (infohash);
-
-----------------------------------------
-
-CREATE TABLE TorrentStatus (
-  status_id    integer PRIMARY KEY NOT NULL,
-  name         text NOT NULL,
-  description  text
-);
 
 ----------------------------------------
 
@@ -113,19 +95,7 @@ CREATE TABLE TorrentTrackerMapping (
 
 ----------------------------------------
 
-CREATE VIEW CollectedTorrent AS SELECT * FROM Torrent WHERE torrent_file_name IS NOT NULL;
-
--- v7: TermFrequency and TorrentBiTermPhrase
---     for "Network Buzz" feature (removed in v21);
---     Also UserEventLog table for user studies.
-
-----------------------------------------
--- v8: BundlerPreference
-
-CREATE TABLE BundlerPreference (
-  query         text PRIMARY KEY,
-  bundle_mode   integer
-);
+CREATE VIEW CollectedTorrent AS SELECT * FROM Torrent WHERE is_collected == 1;
 
 ----------------------------------------
 -- v9: Open2Edit replacing ChannelCast tables
@@ -332,20 +302,7 @@ COMMIT TRANSACTION create_table;
 
 BEGIN TRANSACTION init_values;
 
-INSERT INTO Category VALUES (1, 'Video', 'Video Files');
-INSERT INTO Category VALUES (2, 'VideoClips', 'Video Clips');
-INSERT INTO Category VALUES (3, 'Audio', 'Audio');
-INSERT INTO Category VALUES (4, 'Compressed', 'Compressed');
-INSERT INTO Category VALUES (5, 'Document', 'Documents');
-INSERT INTO Category VALUES (6, 'Picture', 'Pictures');
-INSERT INTO Category VALUES (7, 'xxx', 'XXX');
-INSERT INTO Category VALUES (8, 'other', 'Other');
-
-INSERT INTO TorrentStatus VALUES (0, 'unknown', NULL);
-INSERT INTO TorrentStatus VALUES (1, 'good', NULL);
-INSERT INTO TorrentStatus VALUES (2, 'dead', NULL);
-
-INSERT INTO MyInfo VALUES ('version', 24);
+INSERT INTO MyInfo VALUES ('version', 27);
 
 INSERT INTO MetaDataTypes ('name') VALUES ('name');
 INSERT INTO MetaDataTypes ('name') VALUES ('description');

@@ -11,20 +11,16 @@ import logging
 from threading import currentThread
 from traceback import print_exc
 
-from Tribler.Core.simpledefs import NTFY_TORRENTS, NTFY_VIDEO_ENDED, \
-    DLSTATUS_HASHCHECKING, DLSTATUS_STOPPED_ON_ERROR, NTFY_VIDEO_BUFFERING, \
-    DLMODE_VOD
+from Tribler.Core.simpledefs import (NTFY_TORRENTS, NTFY_VIDEO_ENDED, DLSTATUS_HASHCHECKING, DLSTATUS_STOPPED_ON_ERROR,
+                                     NTFY_VIDEO_BUFFERING, DLMODE_VOD)
 from Tribler.Core.CacheDB.Notifier import Notifier
 
-from Tribler.Main.vwxGUI import forceWxThread, warnWxThread, \
-    SEPARATOR_GREY, GRADIENT_DGREY, GRADIENT_LGREY
+from Tribler.Main.vwxGUI import forceWxThread, warnWxThread, SEPARATOR_GREY, GRADIENT_DGREY, GRADIENT_LGREY
 from Tribler.Main.vwxGUI.GuiImageManager import GuiImageManager
-from Tribler.Main.vwxGUI.widgets import VideoProgress, FancyPanel, \
-    ActionButton, TransparentText, VideoVolume, VideoSlider
+from Tribler.Main.vwxGUI.widgets import (VideoProgress, FancyPanel, ActionButton, TransparentText, VideoVolume,
+                                         VideoSlider)
 
-from Tribler.Core.Video.defs import MEDIASTATE_PLAYING, MEDIASTATE_ENDED, \
-    MEDIASTATE_STOPPED, MEDIASTATE_PAUSED
-from Tribler.Core.Video.VideoPlayer import VideoPlayer
+from Tribler.Core.Video.defs import MEDIASTATE_PLAYING, MEDIASTATE_ENDED, MEDIASTATE_STOPPED, MEDIASTATE_PAUSED
 
 
 class DelayTimer(wx.Timer):
@@ -32,6 +28,7 @@ class DelayTimer(wx.Timer):
     """ vlc.MediaCtrl needs some time to stop after we give it a stop command.
         Wait until it is and then tell it to play the new item
     """
+
     def __init__(self, embedplay):
         wx.Timer.__init__(self)
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -49,6 +46,7 @@ class DelayTimer(wx.Timer):
 
 
 class EmbeddedPlayerPanel(wx.Panel):
+
     """
     The Embedded Player consists of a VLCWindow and the media controls such
     as Play/Pause buttons and Volume Control.
@@ -65,7 +63,7 @@ class EmbeddedPlayerPanel(wx.Panel):
 
         self.utility = utility
         self.guiutility = utility.guiUtility
-        self.videoplayer = VideoPlayer.getInstance()
+        self.videoplayer = self.guiutility.videoplayer
         self.parent = parent
         self.SetBackgroundColour(bg_color)
 
@@ -165,6 +163,9 @@ class EmbeddedPlayerPanel(wx.Panel):
             self.videoplayer.set_internalplayer_callback(self.LoadAndStartPlay)
 
     def OnVideoBuffering(self, subject, changeType, torrent_tuple):
+        if not self:
+            return
+
         download_hash, _, is_buffering = torrent_tuple
         if self.download and self.download.get_def().get_infohash() == download_hash:
             @forceWxThread
@@ -176,7 +177,7 @@ class EmbeddedPlayerPanel(wx.Panel):
             do_gui()
 
     def OnStatesCallback(self, dslist, magnetlist):
-        if not self.download:
+        if not self or not self.download:
             return
 
         for ds in dslist:
@@ -209,7 +210,8 @@ class EmbeddedPlayerPanel(wx.Panel):
 
         self.volctrl.SetValue(self.volume)
         self.SetVolume(self.volume)
-        self.mute.SetBitmapLabel(self.bmp_unmuted if self.mute.GetBitmapLabel() == self.bmp_muted else self.bmp_muted, recreate=True)
+        self.mute.SetBitmapLabel(
+            self.bmp_unmuted if self.mute.GetBitmapLabel() == self.bmp_muted else self.bmp_muted, recreate=True)
 
     @forceWxThread
     def LoadAndStartPlay(self, url, download):
@@ -303,7 +305,8 @@ class EmbeddedPlayerPanel(wx.Panel):
                 self.guiutility.library_manager.startLastVODTorrent()
             else:
                 self.vlcwrap.resume()
-                self.ppbtn.SetBitmapLabel(self.bmp_play if self.ppbtn.GetBitmapLabel() == self.bmp_pause else self.bmp_pause, recreate=True)
+                self.ppbtn.SetBitmapLabel(
+                    self.bmp_play if self.ppbtn.GetBitmapLabel() == self.bmp_pause else self.bmp_pause, recreate=True)
                 self.ppbtn.Enable(True)
 
     @warnWxThread
@@ -320,7 +323,8 @@ class EmbeddedPlayerPanel(wx.Panel):
             try:
                 self.Pause(gui_vod_event=True)
                 self.videoplayer.seek(position)
-                self.vlcwrap.set_media_position_relative(position, self.GetState() in [MEDIASTATE_ENDED, MEDIASTATE_STOPPED])
+                self.vlcwrap.set_media_position_relative(
+                    position, self.GetState() in [MEDIASTATE_ENDED, MEDIASTATE_STOPPED])
 
                 length = self.vlcwrap.get_stream_information_length()
                 length = length / 1000 if length > 0 else self.videoplayer.get_vod_duration(self.download_hash)
@@ -467,11 +471,11 @@ class EmbeddedPlayerPanel(wx.Panel):
                 self.timeposition.SetLabel('%s / %s' % (cur_str, length_str))
                 self.ctrlsizer.Layout()
             elif self.GetState() == MEDIASTATE_ENDED:
-                vp = VideoPlayer.getInstance()
-                download, fileindex = (vp.get_vod_download(), vp.get_vod_fileindex())
+                download, fileindex = (self.videoplayer.get_vod_download(), self.videoplayer.get_vod_fileindex())
                 self.OnStop(None)
                 if download:
-                    self.notifier.notify(NTFY_TORRENTS, NTFY_VIDEO_ENDED, (download.get_def().get_infohash(), fileindex))
+                    self.notifier.notify(NTFY_TORRENTS, NTFY_VIDEO_ENDED, (
+                        download.get_def().get_infohash(), fileindex))
                 if self.fullscreenwindow:
                     self._ToggleFullScreen()
 
@@ -507,7 +511,9 @@ class EmbeddedPlayerPanel(wx.Panel):
             self.vlcwin.Destroy()
             self.vlcwin = vlcwin
 
+
 class VLCWindow(wx.Panel):
+
     """ A wx.Window to be passed to the vlc.MediaControl to draw the video in (normally). """
 
     def __init__(self, parent, vlcwrap):
@@ -529,7 +535,9 @@ class VLCWindow(wx.Panel):
     def get_vlcwrap(self):
         return self.vlcwrap
 
+
 class LogoWindow(wx.Panel):
+
     """ A wx.Window that can display the buffering progress when VLC is not playing. """
 
     def __init__(self, parent):

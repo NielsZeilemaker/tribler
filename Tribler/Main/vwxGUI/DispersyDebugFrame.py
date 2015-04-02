@@ -2,11 +2,13 @@ import wx
 from wx.lib.mixins.listctrl import ListCtrlAutoWidthMixin
 import binascii
 
+from Tribler.Core.Utilities.misc_utils import compute_ratio
+
 from Tribler.Main.vwxGUI import LIST_GREY
 from Tribler.Main.vwxGUI.widgets import _set_font, SimpleNotebook
 from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
 from Tribler.Main.Utility.GuiDBHandler import startWorker, GUI_PRI_DISPERSY
-from Tribler.Main.Utility.utility import compute_ratio, eta_value, size_format
+from Tribler.Main.Utility.utility import eta_value, size_format
 from operator import itemgetter
 from Tribler.community.bartercast4.statistics import BartercastStatisticTypes, _barter_statistics
 
@@ -623,7 +625,7 @@ class RuntimeProfilingPanel(wx.Panel):
         data_list = self.__combined_list[this_idx][4]
         for duration, entry, average, count in data_list:
             self.__list2.Append([u"%7.2f" % duration, u"%s" % entry,
-                u"%7.2f" % average, u"%s" % count])
+                                 u"%7.2f" % average, u"%s" % count])
 
     def UpdateInfo(self, stats):
         self.__list1.DeleteAllItems()

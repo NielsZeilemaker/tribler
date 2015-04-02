@@ -6,7 +6,7 @@ from time import time
 
 from datetime import date
 
-from Tribler.Core.Search.SearchManager import split_into_keywords
+from Tribler.Core.Utilities.search_utils import split_into_keywords
 from Tribler.Core.Video.utils import videoextdefaults
 from Tribler.Core.simpledefs import (DLSTATUS_DOWNLOADING, DLSTATUS_STOPPED, DLSTATUS_SEEDING, DLSTATUS_HASHCHECKING,
                                      DLSTATUS_WAITING4HASHCHECK, DLSTATUS_ALLOCATING_DISKSPACE,
@@ -93,22 +93,21 @@ class Helper(object):
 
 
 class Torrent(Helper):
-    __slots__ = ('infohash', 'name', 'torrent_file_name', 'length', 'category_id', 'status_id', 'num_seeders',
-                 'num_leechers', '_channel', 'channeltorrents_id', 'misc_db', 'torrent_db', 'channelcast_db',
-                 'metadata_db', '_progress', 'download_state', 'relevance_score', 'query_candidates', 'magnetstatus')
+    __slots__ = ('infohash', 'name', 'length', 'category', 'status', 'num_seeders',
+                 'num_leechers', '_channel', 'channeltorrents_id', 'torrent_db', 'channelcast_db',
+                 'metadata_db', 'download_state', 'relevance_score', 'query_candidates', 'magnetstatus')
 
-    def __init__(self, torrent_id, infohash, name, torrent_file_name, length, category_id, status_id, num_seeders, num_leechers, channel):
+    def __init__(self, torrent_id, infohash, name, length, category, status, num_seeders, num_leechers, channel):
         Helper.__init__(self)
 
         assert isinstance(infohash, str), type(infohash)
         assert isinstance(name, basestring), type(name)
 
         self.infohash = infohash
-        self.torrent_file_name = torrent_file_name
         self.name = name
         self.length = length or 0
-        self.category_id = category_id
-        self.status_id = status_id
+        self.category = category
+        self.status = status
 
         self.num_seeders = num_seeders or 0
         self.num_leechers = num_leechers or 0
@@ -117,26 +116,14 @@ class Torrent(Helper):
         self.updateChannel(channel)
 
         self.channeltorrents_id = None
-        self.misc_db = None
         self.torrent_db = None
         self.channelcast_db = None
         self.metadata_db = None
 
         self.relevance_score = None
         self.query_candidates = None
-        self._progress = None
         self.download_state = None
         self.magnetstatus = None
-
-    @cacheProperty
-    def categories(self):
-        if self.category_id:
-            return [self.misc_db.categoryId2Name(self.category_id)]
-
-    @cacheProperty
-    def status(self):
-        if self.status_id:
-            return self.misc_db.torrentStatusId2Name(self.status_id)
 
     @cacheProperty
     def torrent_id(self):
@@ -236,7 +223,7 @@ class Torrent(Helper):
     def progress(self):
         if self.ds:
             return self.ds.get_progress()
-        return min(1, self._progress)
+        return 0.0
 
     @property
     def ds(self):
@@ -270,13 +257,14 @@ class Torrent(Helper):
                     pos_score = -i
                     break
 
-        self.relevance_score = [len(matches['swarmname']), pos_score, len(matches['filenames']), len(matches['fileextensions']), 0]
+        self.relevance_score = [len(matches['swarmname']), pos_score, len(
+            matches['filenames']), len(matches['fileextensions']), 0]
 
     def exactCopy(self, other):
         if other and isinstance(other, Torrent):
             ids = self.torrent_id == other.torrent_id
             hashes = self.infohash == other.infohash
-            readableProps = self.name == other.name and self.length == other.length and self.category_id == other.category_id
+            readableProps = self.name == other.name and self.length == other.length and self.category == other.category
             return ids and hashes and readableProps
         return False
 
@@ -292,20 +280,20 @@ class Torrent(Helper):
     def __getstate__(self):
         statedict = {}
         for key in Torrent.__slots__:
-            if key not in ['download_state', 'misc_db', 'metadata_db', 'channelcast_db', 'torrent_db']:
+            if key not in ['download_state', 'metadata_db', 'channelcast_db', 'torrent_db']:
                 statedict[key] = getattr(self, key, None)
         return statedict
 
     @staticmethod
     def fromTorrentDef(tdef):
-        return Torrent(-1, tdef.get_infohash(), tdef.get_name(), None, tdef.get_length(), None, None, 0, 0, False)
+        return Torrent(-1, tdef.get_infohash(), tdef.get_name(), tdef.get_length(), None, None, 0, 0, False)
 
 
 class RemoteTorrent(Torrent):
     __slots__ = ()
 
-    def __init__(self, torrent_id, infohash, name, length=0, category_id=None, status_id=None, num_seeders=0, num_leechers=0, query_candidates=set()):
-        Torrent.__init__(self, torrent_id, infohash, name, False, length, category_id, status_id, num_seeders, num_leechers, channel=False)
+    def __init__(self, torrent_id, infohash, name, length=0, category=None, status=None, num_seeders=0, num_leechers=0, query_candidates=set()):
+        Torrent.__init__(self, torrent_id, infohash, name, length, category, status, num_seeders, num_leechers, channel=False)
         self.query_candidates = query_candidates
 
 
@@ -317,7 +305,7 @@ class CollectedTorrent(Helper):
 
         self.torrent = torrent
         if self.torrent_id <= 0:
-            raise RuntimeError("self.torrent_id is too low, %d %s" % (self.torrent_id, self.torrent_file_name))
+            raise RuntimeError("self.torrent_id is too low, %d" % self.torrent_id)
 
         self.comment = torrentdef.get_comment_as_unicode()
         self.trackers = torrentdef.get_trackers_as_single_tuple()
@@ -350,13 +338,13 @@ class CollectedTorrent(Helper):
         self._logger.debug("CollectedTorrent: fetching getTorrent from DB %s", self)
 
         swarminfo = self.torrent_db.getTorrent(self.infohash,
-            keys=(u'num_seeders', u'num_leechers', u'last_tracker_check'),
-            include_mypref=False)
+                                               keys=(u'num_seeders', u'num_leechers', u'last_tracker_check'),
+                                               include_mypref=False)
         swarminfo_tuple = None
         if swarminfo:
             swarminfo_tuple = (swarminfo.get(u'num_seeders', 0),
-                swarminfo.get(u'num_leechers', 0),
-                swarminfo.get(u'last_tracker_check', 0))
+                               swarminfo.get(u'num_leechers', 0),
+                               swarminfo.get(u'last_tracker_check', 0))
             self.torrent.num_seeders = swarminfo_tuple[0]
             self.torrent.num_leechers = swarminfo_tuple[1]
             self.last_check = swarminfo_tuple[2]
@@ -425,25 +413,25 @@ class NotCollectedTorrent(CollectedTorrent):
         self.last_check = -1
 
         if self.torrent_id <= 0:
-            raise RuntimeError("self.torrent_id is too low, %d %s" % (self.torrent_id, self.torrent_file_name))
+            raise RuntimeError("self.torrent_id is too low, %d" % self.torrent_id)
 
 
 class LibraryTorrent(Torrent):
     __slots__ = ()
 
-    def __init__(self, torrent_id, infohash, name, torrent_file_name, length, category_id, status_id, num_seeders, num_leechers, progress):
-        Torrent.__init__(self, torrent_id, infohash, name, torrent_file_name, length, category_id, status_id, num_seeders, num_leechers, None)
-        if progress > 1:
-            progress = progress / 100.0
-
-        self._progress = progress
+    def __init__(self, torrent_id, infohash, name, length, category, status, num_seeders, num_leechers):
+        Torrent.__init__(self, torrent_id, infohash, name, length, category, status, num_seeders, num_leechers, None)
 
 
 class ChannelTorrent(Torrent):
-    __slots__ = ('channeltorrent_id', 'dispersy_id', 'colt_name', 'chant_name', 'description', 'time_stamp', 'inserted', 'playlist')
+    __slots__ = ('channeltorrent_id', 'dispersy_id', 'colt_name',
+                 'chant_name', 'description', 'time_stamp', 'inserted', 'playlist')
 
-    def __init__(self, torrent_id, infohash, name, torrent_file_name, length, category_id, status_id, num_seeders, num_leechers, channeltorrent_id, dispersy_id, chant_name, colt_name, description, time_stamp, inserted, channel, playlist):
-        Torrent.__init__(self, torrent_id, infohash, name, torrent_file_name, length, category_id, status_id, num_seeders, num_leechers, channel)
+    def __init__(self, torrent_id, infohash, name, length, category, status, num_seeders, num_leechers,
+                 channeltorrent_id, dispersy_id, chant_name, colt_name, description, time_stamp, inserted, channel,
+                 playlist):
+        Torrent.__init__(self, torrent_id, infohash, name, length, category, status, num_seeders, num_leechers,
+                         channel)
 
         self.channeltorrent_id = channeltorrent_id
         self.dispersy_id = dispersy_id
@@ -487,13 +475,16 @@ class ChannelTorrent(Torrent):
 class RemoteChannelTorrent(ChannelTorrent):
     __slots__ = ()
 
-    def __init__(self, torrent_id, infohash, name, length=0, category_id=None, status_id=None, num_seeders=0, num_leechers=0, channel=False, query_candidates=set()):
-        ChannelTorrent.__init__(self, torrent_id, infohash, name, False, length, category_id, status_id, num_seeders, num_leechers, -1, '-1', '', name, '', None, None, channel, None)
+    def __init__(self, torrent_id, infohash, name, length=0, category=None, status=None, num_seeders=0,
+                 num_leechers=0, channel=False, query_candidates=set()):
+        ChannelTorrent.__init__(self, torrent_id, infohash, name, length, category, status, num_seeders,
+                                num_leechers, -1, '-1', '', name, '', None, None, channel, None)
         self.query_candidates = query_candidates
 
 
 class Channel(Helper):
-    __slots__ = ('id', 'dispersy_cid', 'name', 'description', 'nr_torrents', 'nr_favorites', 'nr_spam', 'my_vote', 'modified', 'my_channel', 'torrents', 'popular_torrents')
+    __slots__ = ('id', 'dispersy_cid', 'name', 'description', 'nr_torrents', 'nr_favorites',
+                 'nr_spam', 'my_vote', 'modified', 'my_channel', 'torrents', 'popular_torrents')
 
     def __init__(self, id, dispersy_cid, name, description, nr_torrents, nr_favorites, nr_spam, my_vote, modified, my_channel):
         Helper.__init__(self)
@@ -582,7 +573,8 @@ class Channel(Helper):
         if not self.popular_torrents or force_refresh:
             from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
             from Tribler.Main.vwxGUI.SearchGridManager import ChannelManager
-            results = ChannelManager.getInstance().getMostPopularTorrentsFromChannel(self.id, ['Torrent.Name'], family_filter=GUIUtility.getInstance().getFamilyFilter(), limit=num_torrents)
+            results = ChannelManager.getInstance().getMostPopularTorrentsFromChannel(
+                self.id, ['Torrent.Name'], family_filter=GUIUtility.getInstance().getFamilyFilter(), limit=num_torrents)
             self.popular_torrents = [result[0] for result in results]
 
     def __eq__(self, other):
@@ -606,7 +598,8 @@ class RemoteChannel(Channel):
 
 
 class Comment(Helper):
-    __slots__ = ('id', 'dispersy_id', 'channeltorrent_id', '_name', 'peer_id', 'comment', 'reply_to_id', 'replies', 'inserted', 'time_stamp', 'playlist', '_torrent', 'channel', 'get_nickname', 'get_mugshot')
+    __slots__ = ('id', 'dispersy_id', 'channeltorrent_id', '_name', 'peer_id', 'comment', 'reply_to_id',
+                 'replies', 'inserted', 'time_stamp', 'playlist', '_torrent', 'channel', 'get_nickname', 'get_mugshot')
 
     def __init__(self, id, dispersy_id, channeltorrent_id, name, peer_id, comment, reply_to_id, inserted, time_stamp, channel, playlist, torrent):
         Helper.__init__(self)
@@ -646,16 +639,11 @@ class Comment(Helper):
         from Tribler.Main.vwxGUI.GuiImageManager import GuiImageManager, SMALL_ICON_MAX_DIM, data2wxBitmap
         gui_image_manager = GuiImageManager.getInstance()
 
+        data = None
         if self.peer_id is None:
             mime, data = self.get_mugshot()
             if data:
                 data = data2wxBitmap(mime, data, SMALL_ICON_MAX_DIM)
-        else:
-            from Tribler.Core.simpledefs import NTFY_PEERS
-            from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
-            peer_db = GUIUtility.getInstance().utility.session.open_dbhandler(NTFY_PEERS)
-            raw_data = peer_db.getPeerById(self.peer_id, keys=u"thumbnail")
-            data = gui_image_manager.getPeerThumbnail(raw_data, SMALL_ICON_MAX_DIM)
 
         if data is None:
             data = gui_image_manager.getImage(u"PEER_THUMB", SMALL_ICON_MAX_DIM)
@@ -722,7 +710,6 @@ class Playlist(Helper):
 class MetadataModification(Helper):
     __slots__ = ('torrent', 'message_id', 'key', 'value')
 
-
     def __init__(self, torrent, message_id, key, value):
         Helper.__init__(self)
 
@@ -737,7 +724,8 @@ class MetadataModification(Helper):
 
 
 class Modification(Helper):
-    __slots__ = ('id', 'dispersy_id', 'peer_id', 'type_id', 'value', 'time_stamp', 'inserted', 'moderation', 'channeltorrent_id', 'channelcast_db', 'get_nickname')
+    __slots__ = ('id', 'dispersy_id', 'peer_id', 'type_id', 'value', 'time_stamp',
+                 'inserted', 'moderation', 'channeltorrent_id', 'channelcast_db', 'get_nickname')
 
     def __init__(self, id, dispersy_id, peer_id, type_id, value, time_stamp, inserted, channeltorrent_id):
         Helper.__init__(self)
@@ -775,7 +763,8 @@ class Modification(Helper):
 
 
 class Moderation(Helper):
-    __slots__ = ('id', 'channel_id', 'peer_id', 'by_peer_id', 'severity', 'message', 'time_stamp', 'inserted', 'modification', 'channelcast_db', 'get_nickname')
+    __slots__ = ('id', 'channel_id', 'peer_id', 'by_peer_id', 'severity', 'message',
+                 'time_stamp', 'inserted', 'modification', 'channelcast_db', 'get_nickname')
 
     def __init__(self, id, channel_id, peer_id, by_peer_id, severity, message, time_stamp, inserted):
         Helper.__init__(self)

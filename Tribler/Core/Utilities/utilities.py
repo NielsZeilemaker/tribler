@@ -9,17 +9,9 @@ from urlparse import urlsplit, parse_qsl
 import binascii
 import logging
 
-from Tribler.Core.Utilities.bencode import bencode, bdecode
+from libtorrent import bencode, bdecode
 
 logger = logging.getLogger(__name__)
-
-
-def isInteger(str_integer):
-    try:
-        int(str_integer)
-        return True
-    except:
-        return False
 
 
 def validTorrentFile(metainfo):
@@ -51,7 +43,7 @@ def validTorrentFile(metainfo):
             host, port = pair
             if not isinstance(host, StringType):
                 raise ValueError('node host not string, but ' + repr(type(host)))
-            if not isinstance(port, IntType):
+            if not isinstance(port, (IntType, LongType)):
                 raise ValueError('node port not int, but ' + repr(type(port)))
 
     if not ('announce' in metainfo or 'nodes' in metainfo):
@@ -79,8 +71,6 @@ def validTorrentFile(metainfo):
 
     if 'root hash' in info:
         infokeys = ['name', 'piece length', 'root hash']
-    elif 'live' in info:
-        infokeys = ['name', 'piece length', 'live']
     else:
         infokeys = ['name', 'piece length', 'pieces']
     for key in infokeys:
@@ -96,13 +86,6 @@ def validTorrentFile(metainfo):
         rh = info['root hash']
         if not isinstance(rh, StringType) or len(rh) != 20:
             raise ValueError('info roothash is not 20-byte string')
-    elif 'live' in info:
-        live = info['live']
-        if not isinstance(live, DictType):
-            raise ValueError('info live is not a dict')
-        else:
-            if 'authmethod' not in live:
-                raise ValueError('info live misses key' + 'authmethod')
     else:
         p = info['pieces']
         if not isinstance(p, StringType) or len(p) % 20 != 0:
@@ -154,19 +137,6 @@ def validTorrentFile(metainfo):
 #            for url in tier:
 #                if not isValidURL(url):
 #                    raise ValueError('announce-list url is not valid '+`url`)
-
-    if 'azureus_properties' in metainfo:
-        azprop = metainfo['azureus_properties']
-        if not isinstance(azprop, DictType):
-            raise ValueError('azureus_properties is not dict, but ' + repr(type(azprop)))
-        if 'Content' in azprop:
-            content = azprop['Content']
-            if not isinstance(content, DictType):
-                raise ValueError('azureus_properties content is not dict, but ' + repr(type(content)))
-            if 'thumbnail' in content:
-                thumb = content['thumbnail']
-                if not isinstance(thumb, StringType):
-                    raise ValueError('azureus_properties content thumbnail is not string')
 
     # Perform check on httpseeds/url-list fields
     if 'url-list' in metainfo:
@@ -232,12 +202,6 @@ def show_permid_short(permid):
     # return encodestring(sha(s).digest()).replace("\n","")
 
 
-def get_collected_torrent_filename(infohash):
-    filename = binascii.hexlify(infohash) + '.torrent'
-    return filename
-    # exceptions will be handled by got_metadata()
-
-
 def parse_magnetlink(url):
     # url must be a magnet link
     dn = None
@@ -292,14 +256,8 @@ def fix_torrent(file_path):
     f.close()
 
     # Check if correct bdata
-    fixed_data = bdata
-    try:
-        bdecode(bdata)
-    except ValueError:
-        # Try reading using sloppy
-        try:
-            fixed_data = bencode(bdecode(bdata, 1))
-        except:
-            fixed_data = None
+    fixed_data = bdecode(bdata)
+    if fixed_data is not None:
+        fixed_data = bencode(fixed_data)
 
     return fixed_data

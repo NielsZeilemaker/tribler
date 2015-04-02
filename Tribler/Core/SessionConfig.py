@@ -22,7 +22,8 @@ from Tribler.Core.RawServer.RawServer import autodetect_socket_style
 from Tribler.Core.Utilities.configparser import CallbackConfigParser
 from Tribler.Core.Utilities.network_utils import get_random_port
 from Tribler.Core.defaults import sessdefaults
-from Tribler.Core.osutils import is_android
+from Tribler.Core.osutils import is_android, get_appstate_dir
+from Tribler.Core.simpledefs import STATEDIR_SESSCONFIG
 
 
 class SessionConfigInterface(object):
@@ -34,6 +35,7 @@ class SessionConfigInterface(object):
     Use SessionStartupConfig from creating and manipulation configurations
     before session startup time. This is just a parent class.
     """
+
     def __init__(self, sessconfig=None):
         """ Constructor.
         @param sessconfig Optional dictionary used internally
@@ -70,7 +72,8 @@ class SessionConfigInterface(object):
             if sys.platform == 'darwin':
                 self.sessconfig.set(u'general', u'videoanalyserpath', u"vlc/ffmpeg")
             elif is_android(strict=True):
-                self.sessconfig.set(u'general', u'videoanalyserpath', os.path.join(os.environ['ANDROID_PRIVATE'], 'ffmpeg'))
+                self.sessconfig.set(u'general', u'videoanalyserpath', os.path.join(
+                    os.environ['ANDROID_PRIVATE'], 'ffmpeg'))
             else:
                 self.sessconfig.set(u'general', u'videoanalyserpath', ffmpegname)
         else:
@@ -80,7 +83,8 @@ class SessionConfigInterface(object):
         if sys.platform == 'win32':
             videoplayerpath = os.path.expandvars('${PROGRAMFILES}') + '\\Windows Media Player\\wmplayer.exe'
         elif sys.platform == 'darwin':
-            videoplayerpath = find_executable("vlc") or ("/Applications/VLC.app" if os.path.exists("/Applications/VLC.app") else None) or "/Applications/QuickTime Player.app"
+            videoplayerpath = find_executable("vlc") or ("/Applications/VLC.app" if os.path.exists(
+                "/Applications/VLC.app") else None) or "/Applications/QuickTime Player.app"
         else:
             videoplayerpath = find_executable("vlc") or "vlc"
 
@@ -120,7 +124,23 @@ class SessionConfigInterface(object):
     def get_state_dir(self):
         """ Returns the directory the Session stores its state in.
         @return An absolute path name. """
-        return self.sessconfig.get(u'general', u'state_dir')
+
+        in_config_path = self.sessconfig.get(u'general', u'state_dir')
+        return in_config_path or self.get_default_state_dir()
+
+    @staticmethod
+    def get_default_state_dir(homedirpostfix='.Tribler'):
+        # Allow override
+        statedirvar = '${TSTATEDIR}'
+        statedir = os.path.expandvars(statedirvar)
+        if statedir and statedir != statedirvar:
+            return statedir
+
+        if os.path.isdir(homedirpostfix):
+            return os.path.abspath(homedirpostfix)
+
+        appdir = get_appstate_dir()
+        return os.path.join(appdir, homedirpostfix)
 
     def set_install_dir(self, installdir):
         """ Set the directory in which the Tribler Core software is installed.
@@ -239,8 +259,8 @@ class SessionConfigInterface(object):
         """ Returns which proxy LibTorrent is using.
         @return Tuple containing ptype, server, authentication values (as described in set_libtorrent_proxy_settings)
         """
-        return (self.sessconfig.get(u'libtorrent', u'lt_proxytype'), \
-                self.sessconfig.get(u'libtorrent', u'lt_proxyserver'), \
+        return (self.sessconfig.get(u'libtorrent', u'lt_proxytype'),
+                self.sessconfig.get(u'libtorrent', u'lt_proxyserver'),
                 self.sessconfig.get(u'libtorrent', u'lt_proxyauth'))
 
     def set_anon_proxy_settings(self, ptype, server=None, auth=None):
@@ -260,7 +280,6 @@ class SessionConfigInterface(object):
         return (self.sessconfig.get(u'libtorrent', u'anon_proxytype'),
                 self.sessconfig.get(u'libtorrent', u'anon_proxyserver'),
                 self.sessconfig.get(u'libtorrent', u'anon_proxyauth'))
-
 
     def set_anon_listen_port(self, listen_port=None):
         self.sessconfig.set(u'libtorrent', u'anon_listen_port', listen_port)
@@ -582,6 +601,41 @@ class SessionConfigInterface(object):
         """
         self.sessconfig.set(u'video', u'preferredmode', mode)
 
+    def get_enable_torrent_search(self):
+        """ Gets if to enable torrent search (SearchCommunity).
+        :return: True or False.
+        """
+        return self.sessconfig.get(u'search_community', u'enabled')
+
+    def set_enable_torrent_search(self, mode):
+        """ Sets if to enable torrent search (SearchCommunity).
+        :param mode: True or False.
+        """
+        self.sessconfig.set(u'search_community', u'enabled', mode)
+
+    def get_enable_channel_search(self):
+        """ Gets if to enable torrent search (AllChannelCommunity).
+        :return: True or False.
+        """
+        return self.sessconfig.get(u'allchannel_community', u'enabled')
+
+    def set_enable_channel_search(self, mode):
+        """ Sets if to enable torrent search (AllChannelCommunity).
+        :param mode: True or False.
+        """
+        self.sessconfig.set(u'allchannel_community', u'enabled', mode)
+
+    #
+    # Static methods
+    #
+    @staticmethod
+    def get_default_config_filename(state_dir):
+        """ Return the name of the file where a session config is saved by default.
+        @return A filename
+        """
+        return os.path.join(state_dir, STATEDIR_SESSCONFIG)
+
+
 
 class SessionStartupConfig(SessionConfigInterface, Copyable, Serializable):
 
@@ -590,18 +644,24 @@ class SessionStartupConfig(SessionConfigInterface, Copyable, Serializable):
     def __init__(self, sessconfig=None):
         SessionConfigInterface.__init__(self, sessconfig)
 
-
     #
     # Class method
     #
     @staticmethod
-    def load(filename):
+    def load(filename=None):
         """
         Load a saved SessionStartupConfig from disk.
 
-        @param filename  An absolute Unicode filename
+        @param filename  An absolute Unicode filename, if None, the default path will be used.
         @return SessionStartupConfig object
         """
+        if not filename:
+            # Then try to read from default location
+            filename = SessionStartupConfig.get_default_config_filename(SessionStartupConfig.get_default_state_dir())
+        if not os.path.isfile(filename):
+            # No config on the default location, just start from scratch
+            return SessionStartupConfig()
+
         # Class method, no locking required
         sessconfig = CallbackConfigParser()
         try:
@@ -610,7 +670,6 @@ class SessionStartupConfig(SessionConfigInterface, Copyable, Serializable):
             raise IOError, "Failed to open session config file"
 
         return SessionStartupConfig(sessconfig)
-
 
     def save(self, filename):
         """ Save the SessionStartupConfig to disk.

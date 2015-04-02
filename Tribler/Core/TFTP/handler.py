@@ -27,6 +27,7 @@ DIR_PREFIX = u"dir" + DIR_SEPARATOR
 
 
 class TftpHandler(TaskManager):
+
     """
     This is the TFTP handler that should be registered at the RawServer to handle TFTP packets.
     """
@@ -45,17 +46,6 @@ class TftpHandler(TaskManager):
 
         self.session = session
         self.root_dir = root_dir
-        # check the root directory if it is valid
-        if not os.path.exists(root_dir):
-            try:
-                os.makedirs(self.root_dir)
-            except OSError as ex:
-                self._logger.critical(u"Could not create root_dir %s: %s", root_dir, ex)
-                raise ex
-        if os.path.exists(root_dir) and not os.path.isdir(root_dir):
-            msg = u"root_dir is not a directory: %s" % root_dir
-            self._logger.critical(msg)
-            raise Exception(msg)
 
         self._endpoint = endpoint
         self._prefix = prefix
@@ -376,7 +366,7 @@ class TftpHandler(TaskManager):
         :param file_name: The path of the file.
         """
 
-        infohash=file_name[:-8]  # len('.torrent') = 8
+        infohash = file_name[:-8]  # len('.torrent') = 8
 
         file_data = self.session.lm.torrent_store.get(infohash)
         # check if file exists
@@ -409,7 +399,7 @@ class TftpHandler(TaskManager):
         # check if it is an ERROR packet
         if packet['opcode'] == OPCODE_ERROR:
             self._logger.warning(u"%s got ERROR message: code = %s, msg = %s",
-                               session, packet['error_code'], packet['error_msg'])
+                                 session, packet['error_code'], packet['error_msg'])
             session.is_failed = True
             return
 

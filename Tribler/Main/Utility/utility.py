@@ -51,7 +51,6 @@ class Utility(object):
                             'family_filter': 1,
                             'window_x': "",
                             'window_y': "",
-                            'use_bundle_magic': 0,
                             # WebUI
                             'use_webui': 0,
                             'webui_port': 8080,
@@ -147,10 +146,6 @@ def round_range(x):
         returnar.add(value)
     returnar = sorted(returnar)
     return returnar
-
-
-def compute_ratio(i, j):
-    return u"%d / %d ~%.1f%%" % (i, j, (100.0 * i / j) if j else 0.0)
 
 
 def eta_value(n, truncate=3):

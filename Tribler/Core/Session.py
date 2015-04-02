@@ -15,11 +15,9 @@ from Tribler.Core.CacheDB.sqlitecachedb import SQLiteCacheDB
 from Tribler.Core.SessionConfig import SessionConfigInterface, SessionStartupConfig
 from Tribler.Core.Upgrade.upgrade import TriblerUpgrader
 from Tribler.Core.exceptions import NotYetImplementedException, OperationNotEnabledByConfigurationException
-from Tribler.Core.osutils import get_appstate_dir
-from Tribler.Core.simpledefs import (STATEDIR_PEERICON_DIR, STATEDIR_DLPSTATE_DIR, STATEDIR_SESSCONFIG,
-                                     NTFY_MISC, NTFY_PEERS, NTFY_BUNDLERPREFERENCE, NTFY_TORRENTS,
-                                     NTFY_MYPREFERENCES, NTFY_VOTECAST, NTFY_CHANNELCAST, NTFY_UPDATE,
-                                     NTFY_INSERT, NTFY_DELETE, NTFY_METADATA, STATEDIR_TORRENT_STORE_DIR)
+from Tribler.Core.simpledefs import (STATEDIR_PEERICON_DIR, STATEDIR_DLPSTATE_DIR, NTFY_PEERS, NTFY_TORRENTS,
+                                     NTFY_MYPREFERENCES, NTFY_VOTECAST, NTFY_CHANNELCAST, NTFY_UPDATE, NTFY_INSERT,
+                                     NTFY_DELETE, NTFY_METADATA, STATEDIR_TORRENT_STORE_DIR)
 
 
 GOTM2CRYPTO = False
@@ -69,15 +67,7 @@ class Session(SessionConfigInterface):
 
         # Determine startup config to use
         if scfg is None:  # If no override
-            try:
-                # Then try to read from default location
-                state_dir = Session.get_default_state_dir()
-                cfgfilename = Session.get_default_config_filename(state_dir)
-                scfg = SessionStartupConfig.load(cfgfilename)
-            except:
-                # If that fails, create a fresh config with factory defaults
-                self._logger.exception(u"Failed to init startup config")
-                scfg = SessionStartupConfig()
+            scfg = SessionStartupConfig.load()
         else:  # overrides any saved config
             # Work from copy
             scfg = SessionStartupConfig(copy.copy(scfg.sessconfig))
@@ -91,13 +81,8 @@ class Session(SessionConfigInterface):
                 setter(default_dir)
             create_dir(dirname or default_dir)
 
-        set_and_create_dir(scfg.get_state_dir(), scfg.set_state_dir, Session.get_default_state_dir())
-        # Note that we are setting it to STATEDIR_TORRENT_STORE_DIR instead of
-        # STATEDIR_TORRENTCOLL_DIR as that dir is unused and only kept for
-        # the upgrade process.
-        set_and_create_dir(scfg.get_torrent_collecting_dir(),
-                           scfg.set_torrent_collecting_dir,
-                           os.path.join(scfg.get_state_dir(), STATEDIR_TORRENT_STORE_DIR))
+        state_dir = scfg.get_state_dir()
+        set_and_create_dir(state_dir, scfg.set_state_dir, state_dir)
 
         set_and_create_dir(scfg.get_torrent_store_dir(),
                            scfg.set_torrent_store_dir,
@@ -199,25 +184,6 @@ class Session(SessionConfigInterface):
     def del_instance():
         Session.__single = None
     del_instance = staticmethod(del_instance)
-
-    @staticmethod
-    def get_default_state_dir(homedirpostfix='.Tribler'):
-        """ Returns the factory default directory for storing session state
-        on the current platform (Win32,Mac,Unix).
-        @return An absolute path name. """
-
-        # Allow override
-        statedirvar = '${TSTATEDIR}'
-        statedir = os.path.expandvars(statedirvar)
-        if statedir and statedir != statedirvar:
-            return statedir
-
-        if os.path.isdir(homedirpostfix):
-            return os.path.abspath(homedirpostfix)
-
-        appdir = get_appstate_dir()
-        statedir = os.path.join(appdir, homedirpostfix)
-        return statedir
 
     #
     # Public methods
@@ -431,10 +397,8 @@ class Session(SessionConfigInterface):
             raise OperationNotEnabledByConfigurationException()
 
         # Called by any thread
-        #with self.sesslock:
-        if subject == NTFY_MISC:
-            return self.lm.misc_db
-        elif subject == NTFY_METADATA:
+        # with self.sesslock:
+        if subject == NTFY_METADATA:
             return self.lm.metadata_db
         elif subject == NTFY_PEERS:
             return self.lm.peer_db
@@ -446,14 +410,16 @@ class Session(SessionConfigInterface):
             return self.lm.votecast_db
         elif subject == NTFY_CHANNELCAST:
             return self.lm.channelcast_db
-        elif subject == NTFY_BUNDLERPREFERENCE:
-            return self.lm.bundlerpref_db
         else:
             raise ValueError(u"Cannot open DB subject: %s" % subject)
 
     def close_dbhandler(self, dbhandler):
         """ Closes the given database connection """
         dbhandler.close()
+
+    def get_statistics(self):
+        from Tribler.Core.statistics import TriblerStatistics
+        return TriblerStatistics(self).dump_statistics()
 
     #
     # Persistence and shutdown
@@ -493,7 +459,8 @@ class Session(SessionConfigInterface):
         """
         # Called by any thread
         self.lm.early_shutdown()
-        self.checkpoint_shutdown(stop=True, checkpoint=checkpoint, gracetime=gracetime, hacksessconfcheckpoint=hacksessconfcheckpoint)
+        self.checkpoint_shutdown(stop=True, checkpoint=checkpoint,
+                                 gracetime=gracetime, hacksessconfcheckpoint=hacksessconfcheckpoint)
         # Arno, 2010-08-09: now shutdown after gracetime
         self.uch.shutdown()
 
@@ -620,13 +587,6 @@ class Session(SessionConfigInterface):
         cfgfilename = Session.get_default_config_filename(sscfg.get_state_dir())
         sscfg.save(cfgfilename)
 
-    def get_default_config_filename(state_dir):
-        """ Return the name of the file where a session config is saved by default.
-        @return A filename
-        """
-        return os.path.join(state_dir, STATEDIR_SESSCONFIG)
-    get_default_config_filename = staticmethod(get_default_config_filename)
-
     def update_trackers(self, infohash, trackers):
         """ Updates the trackers of a torrent.
         :param infohash: infohash of the torrent that needs to be updated
@@ -658,3 +618,29 @@ class Session(SessionConfigInterface):
         :param data: The torrent file data.
         """
         self.lm.torrent_store.put(hexlify(infohash), data)
+
+    def search_remote_torrents(self, keywords):
+        """
+        Searches for remote torrents through SearchCommunity with the given keywords.
+        :param keywords: The given keywords.
+        :return: The number of requests made.
+        """
+        if not self.get_enable_torrent_search():
+            raise OperationNotEnabledByConfigurationException("torrent_search is not enabled")
+        return self.lm.search_manager.search_for_torrents(keywords)
+
+    def search_remote_channels(self, keywords):
+        """
+        Searches for remote channels through AllChannelCommunity with the given keywords.
+        :param keywords: The given keywords.
+        """
+        if not self.get_enable_channel_search():
+            raise OperationNotEnabledByConfigurationException("channel_search is not enabled")
+        self.lm.search_manager.search_for_channels(keywords)
+
+    def check_torrent_health(self, infohash):
+        """
+        Checks the given torrent's health on its trackers.
+        :param infohash: The given torrent infohash.
+        """
+        self.lm.torrent_checker.add_gui_request(infohash)
