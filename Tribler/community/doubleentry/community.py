@@ -32,6 +32,7 @@ class DoubleEntryCommunity(Community):
         self._ec = self._my_member._ec
         self._public_key = ECCrypto().key_to_bin(self._ec.pub())
         self.persistence = Persistence(self.dispersy)
+        self.candidate_queue = []
 
     def initialize(self, a=None, b=None):
         super(DoubleEntryCommunity, self).initialize()
@@ -65,8 +66,8 @@ class DoubleEntryCommunity(Community):
             Message(self, SIGNATURE_REQUEST,
                     MemberAuthentication(),
                     PublicResolution(),
-                    FullSyncDistribution(enable_sequence_number=False, synchronization_direction=u"DESC", priority=128),
-                    CommunityDestination(node_count=1),
+                    DirectDistribution(),
+                    CandidateDestination(),
                     SignatureRequestPayload(),
                     self._check_signature_request,
                     self._on_signature_request),
@@ -85,12 +86,16 @@ class DoubleEntryCommunity(Community):
     def publish_signature_request_message(self):
         """
         Creates and sends out signature_request message.
+        :param candidate The candidate who will receive the signature_request message
         """
-        self._logger.info("Sending signature request.")
-        message = self.create_signature_request_message()
-        self.dispersy.store_update_forward([message], True, True, True)
+        if self.candidate_queue:
+            self._logger.info("Sending signature request.")
+            message = self.create_signature_request_message(self.candidate_queue.pop())
+            self.dispersy.store_update_forward([message], True, True, True)
+        else:
+            self._logger.info("No candidate available to send signature request.")
 
-    def create_signature_request_message(self):
+    def create_signature_request_message(self, candidate):
         """
         Create a signature request message using the current time stamp.
         :return: Signature_request message ready for distribution.
@@ -104,6 +109,7 @@ class DoubleEntryCommunity(Community):
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
+                            destination=(candidate,),
                             payload=(timestamp, previous_hash_requester, public_key_requester, signature))
         return message
 
@@ -149,7 +155,6 @@ class DoubleEntryCommunity(Community):
         Creates and sends out signature_response message for a signature_request message.
         The message is also locally persisted.
         :param signature_request: signature_request message that needs to be responded to.
-        :param candidate: the candidate that will receive the signature response message.
         """
         self._logger.info("Sending signature response.")
         message = self.create_signature_response_message(signature_request)
@@ -160,7 +165,6 @@ class DoubleEntryCommunity(Community):
         """
         Create a signature response message for a signature_request message.
         :param signature_request: signature_request message that needs to be responded to.
-        :param candidate: the candidate that will receive the signature response message.
         :return: Signature_response message ready for distribution.
         """
         meta = self.get_meta_message(SIGNATURE_RESPONSE)
@@ -218,6 +222,11 @@ class DoubleEntryCommunity(Community):
                 DropMessage(message, "Invalid signature response message")
 
     def _on_signature_response(self, messages):
+        """
+        Handles behaviour of the community when it receives a signature_response message.
+        It persist the signature response.
+        :param messages: Signature_response messages that needs to be handled.
+        """
         for message in messages:
             # Check if the messages are not from ourselves.
             if message.payload.public_key_responder != self._public_key:
@@ -232,6 +241,12 @@ class DoubleEntryCommunity(Community):
         message_hash = self.hash_signature_response(message)
         self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))
         self.persistence.add_block(message_hash, message.payload)
+
+    def on_introduction_response(self, messages):
+        super(DoubleEntryCommunity, self).on_introduction_response(messages)
+        for message in messages:
+            self._logger.info("in on_introduction_response: Saving %s candidate.", message.candidate)
+            self.candidate_queue.append(message.candidate)
 
     @staticmethod
     def hash_signature_response(message):
