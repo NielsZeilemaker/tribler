@@ -42,6 +42,8 @@ class DoubleEntry(object):
         # Change port so we can run multiple instances on local host.
         self.settings.socks_listen_ports = [random.randint(1000, 65535) for _ in range(5)]
         self.session = self.create_tribler_session()
+
+        self.session.prestart()
         self.session.start()
         print >> sys.stderr, "Using port %d" % self.session.get_dispersy_port()
 
@@ -58,7 +60,7 @@ class DoubleEntry(object):
         config.set_torrent_checking(False)
         config.set_torrent_collecting(False)
         config.set_multicast_local_peer_discovery(False)
-        config.set_megacache(False)
+        config.set_megacache(True)
         config.set_mainline_dht(False)
         config.set_libtorrent(False)
         config.set_dht_torrent_collecting(False)
