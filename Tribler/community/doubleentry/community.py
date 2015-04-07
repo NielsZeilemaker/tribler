@@ -14,7 +14,7 @@ from Tribler.dispersy.conversion import DefaultConversion
 
 from Tribler.community.doubleentry.payload import SignatureRequestPayload, SignatureResponsePayload
 from Tribler.community.doubleentry.conversion import DoubleEntryConversion
-from Tribler.community.doubleentry.persistence import Persistence
+from Tribler.community.doubleentry.database import Persistence
 
 SIGNATURE_REQUEST = u"de_signature_request"
 SIGNATURE_RESPONSE = u"de_signature_response"

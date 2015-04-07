@@ -8,9 +8,9 @@ from os import path
 
 from Tribler.dispersy.crypto import ECCrypto
 
-from Tribler.community.doubleentry.persistence import Persistence
-from Tribler.community.doubleentry.persistence import GENESIS_ID
-from Tribler.community.doubleentry.persistence import DATABASEPATH
+from Tribler.community.doubleentry.database import Persistence
+from Tribler.community.doubleentry.database import GENESIS_ID
+from Tribler.community.doubleentry.database import DATABASEPATH
 
 from Tribler.dispersy.dispersydatabase import DispersyDatabase
 
