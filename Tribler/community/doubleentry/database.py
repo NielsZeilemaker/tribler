@@ -49,14 +49,15 @@ class Persistence:
     """
     Persistence layer for the DoubleEntry Community.
     """
-    def __init__(self, dispersy):
+    def __init__(self, working_directory):
         """
         Sets up the persistence layer ready for use.
-        :param dispersy: Dispersy object needed to setup the database connection.
+        :param working_directory: Path to the working directory
+        that will contain the the db at workingdirectory/DATABASEPATH
         :return:
         """
         self._previous_id = GENESIS_ID
-        self._dispersy = dispersy
+        self._working_directory = working_directory
         self.db = None
 
     def add_block(self, block_id, block):
@@ -157,8 +158,15 @@ class Persistence:
         :return: Initiate the database and setup the connection.
         """
         if self.db is None:
-            self.db = DoubleEntryDB(self._dispersy)
+            self.db = DoubleEntryDB(self._working_directory)
             self.db.open()
+
+    def close(self):
+        """
+        Close the persistence
+        """
+        if self.db:
+            self.db.close()
 
 
 class DoubleEntryDB(Database):
@@ -166,9 +174,8 @@ class DoubleEntryDB(Database):
     Ensures a proper DB schema on startup.
     """
 
-    def __init__(self, dispersy):
-        self._dispersy = dispersy
-        super(DoubleEntryDB, self).__init__(path.join(dispersy.working_directory, DATABASEPATH))
+    def __init__(self, working_directory):
+        super(DoubleEntryDB, self).__init__(path.join(working_directory, DATABASEPATH))
 
     def open(self, initial_statements=True, prepare_visioning=True):
         return super(DoubleEntryDB, self).open(initial_statements, prepare_visioning)

@@ -5,8 +5,8 @@ from hashlib import sha1
 
 from Tribler.dispersy.authentication import MemberAuthentication
 from Tribler.dispersy.resolution import PublicResolution
-from Tribler.dispersy.distribution import FullSyncDistribution, DirectDistribution
-from Tribler.dispersy.destination import CommunityDestination, CandidateDestination
+from Tribler.dispersy.distribution import DirectDistribution
+from Tribler.dispersy.destination import CandidateDestination
 from Tribler.dispersy.community import Community
 from Tribler.dispersy.message import Message, DropMessage
 from Tribler.dispersy.crypto import ECCrypto
@@ -31,7 +31,7 @@ class DoubleEntryCommunity(Community):
 
         self._ec = self._my_member._ec
         self._public_key = ECCrypto().key_to_bin(self._ec.pub())
-        self.persistence = Persistence(self.dispersy)
+        self.persistence = Persistence(self.dispersy.working_directory)
         self.candidate_queue = []
 
     def initialize(self, a=None, b=None):
@@ -83,17 +83,13 @@ class DoubleEntryCommunity(Community):
     def initiate_conversions(self):
         return [DefaultConversion(self), DoubleEntryConversion(self)]
 
-    def publish_signature_request_message(self):
+    def publish_signature_request_message(self, candidate):
         """
         Creates and sends out signature_request message.
-        :param candidate The candidate who will receive the signature_request message
         """
-        if self.candidate_queue:
-            self._logger.info("Sending signature request.")
-            message = self.create_signature_request_message(self.candidate_queue.pop())
-            self.dispersy.store_update_forward([message], True, True, True)
-        else:
-            self._logger.info("No candidate available to send signature request.")
+        self._logger.info("Sending signature request.")
+        message = self.create_signature_request_message(candidate)
+        self.dispersy.store_update_forward([message], True, True, True)
 
     def create_signature_request_message(self, candidate):
         """
@@ -149,6 +145,9 @@ class DoubleEntryCommunity(Community):
             # Check if the messages are not from ourselves.
             if message.payload.public_key_requester != self._public_key:
                 self.publish_signature_response_message(message)
+
+    def next_candidate(self):
+        return self.candidate_queue.pop()
 
     def publish_signature_response_message(self, signature_request):
         """
@@ -287,6 +286,11 @@ class DoubleEntryCommunity(Community):
     def get_key(self):
         return self._ec
 
+    def unload_community(self):
+        self._logger.debug("Unloading the DoubleEntry Community.")
+        super(DoubleEntryCommunity, self).unload_community()
+        # Close the persistence layer
+        self.persistence.close()
 
 class DoubleEntrySettings(object):
     """

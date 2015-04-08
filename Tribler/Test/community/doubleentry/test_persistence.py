@@ -12,8 +12,6 @@ from Tribler.community.doubleentry.database import Persistence
 from Tribler.community.doubleentry.database import GENESIS_ID
 from Tribler.community.doubleentry.database import DATABASEPATH
 
-from Tribler.dispersy.dispersydatabase import DispersyDatabase
-
 
 class TestPersistence(unittest.TestCase):
     """
@@ -23,12 +21,11 @@ class TestPersistence(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(TestPersistence, self).__init__(*args, **kwargs)
         self.public_key = "own_key"
-        dispersy = TestDispersy()
 
-        self.persistence = Persistence(dispersy)
+        self.persistence = Persistence(os.path.dirname(os.path.abspath(__file__)))
 
     def tearDown(self):
-        self.persistence.db.close()
+        self.persistence.close()
         os.remove(path.join(os.path.dirname(os.path.abspath(__file__)), DATABASEPATH))
 
     def test_genesis_block(self):
@@ -127,22 +124,6 @@ class TestBlock:
                 self.signature_requester + "." + self. previous_hash_responder + "." + self.public_key_responder +
                 "." + self.signature_responder)
         return sha1(data).digest()
-
-
-class TestDispersy:
-
-    working_directory = os.path.dirname(os.path.abspath(__file__))
-
-    def __init__(self):
-        database_filename = u"test.db"
-        database_directory = os.path.join(self.working_directory, u"sqlite")
-        if not os.path.isdir(database_directory):
-            os.makedirs(database_directory)
-        database_filename = os.path.join(database_directory, database_filename)
-        self.database = DispersyDatabase(database_filename)
-
-    def close_database(self):
-        self.database.close(False)
 
 if __name__ == "__main__":
     unittest.main()
