@@ -17,7 +17,7 @@ def decode_db(string):
     return base64.decodestring(string.encode('ascii', 'replace'))
 
 """ Path to the database location + dispersy._workingdirectory"""
-DATABASEPATH = path.join(u"sqlite", u"doubleentry.db")
+DATABASE_PATH = path.join(u"sqlite", u"doubleentry.db")
 """ ID of the first block of the chain. """
 GENESIS_ID = "GENESIS_ID"
 """ Version to keep track if the db schema needs to be updated."""
@@ -53,10 +53,9 @@ class Persistence:
         """
         Sets up the persistence layer ready for use.
         :param working_directory: Path to the working directory
-        that will contain the the db at workingdirectory/DATABASEPATH
+        that will contain the the db at workingdirectory/DATABASE_PATH
         :return:
         """
-        self._previous_id = GENESIS_ID
         self._working_directory = working_directory
         self.db = None
 
@@ -175,7 +174,7 @@ class DoubleEntryDB(Database):
     """
 
     def __init__(self, working_directory):
-        super(DoubleEntryDB, self).__init__(path.join(working_directory, DATABASEPATH))
+        super(DoubleEntryDB, self).__init__(path.join(working_directory, DATABASE_PATH))
 
     def open(self, initial_statements=True, prepare_visioning=True):
         return super(DoubleEntryDB, self).open(initial_statements, prepare_visioning)

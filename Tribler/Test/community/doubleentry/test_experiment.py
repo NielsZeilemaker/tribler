@@ -1,7 +1,6 @@
 import unittest
 
-
-from Tribler.community.doubleentry.experiments import GraphDrawer
+from Tribler.community.doubleentry.experiments.NumericalExample import GraphDrawer
 
 
 class TestGraphDrawer(unittest.TestCase):

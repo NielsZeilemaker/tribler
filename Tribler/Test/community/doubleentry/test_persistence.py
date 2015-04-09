@@ -10,7 +10,7 @@ from Tribler.dispersy.crypto import ECCrypto
 
 from Tribler.community.doubleentry.database import Persistence
 from Tribler.community.doubleentry.database import GENESIS_ID
-from Tribler.community.doubleentry.database import DATABASEPATH
+from Tribler.community.doubleentry.database import DATABASE_PATH
 
 
 class TestPersistence(unittest.TestCase):
@@ -26,7 +26,7 @@ class TestPersistence(unittest.TestCase):
 
     def tearDown(self):
         self.persistence.close()
-        os.remove(path.join(os.path.dirname(os.path.abspath(__file__)), DATABASEPATH))
+        os.remove(path.join(os.path.dirname(os.path.abspath(__file__)), DATABASE_PATH))
 
     def test_genesis_block(self):
         # Act
