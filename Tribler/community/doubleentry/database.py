@@ -7,14 +7,25 @@ from os import path
 from Tribler.dispersy.database import Database
 
 
-def encode_db(string):
+def encode_db(db_object):
     """ Encodes a string in database encoding"""
-    return unicode(base64.encodestring(string))
+    if isinstance(db_object, str):
+        return unicode(base64.encodestring(db_object))
+    elif isinstance(db_object, int):
+        return db_object
+    else:
+        raise TypeError("object from database has unknown type.")
 
 
-def decode_db(string):
+def decode_db(db_object):
     """ Decodes a string in database encoding"""
-    return base64.decodestring(string.encode('ascii', 'replace'))
+    if isinstance(db_object, unicode):
+        return base64.decodestring(db_object.encode('ascii', 'replace'))
+    elif isinstance(db_object, int):
+        return db_object
+    else:
+        raise TypeError("object from database has unknown type.")
+
 
 """ Path to the database location + dispersy._workingdirectory"""
 DATABASE_PATH = path.join(u"sqlite", u"doubleentry.db")
@@ -32,7 +43,12 @@ CREATE TABLE IF NOT EXISTS double_entry(
  previous_hash_responder	text NOT NULL,
  public_key_responder		text NOT NULL,
  signature_responder		text NOT NULL,
- payload			        text NOT NULL
+ sequence_number_requester  integer NOT NULL,
+ sequence_number_responder  integer NOT NULL,
+ up                         integer NOT NULL,
+ down                       integer NOT NULL,
+ total_up                   integer NOT NULL,
+ total_down                 integer NOT NULL
 );
 
 CREATE TABLE option(key TEXT PRIMARY KEY, value BLOB);
@@ -70,15 +86,18 @@ class Persistence:
                          (block_id,
                           block.previous_hash_requester, block.public_key_requester, block.signature_requester,
                           block.previous_hash_responder, block.public_key_responder, block.signature_responder,
-                          block.timestamp)))
+                          block.sequence_number_requester, block.sequence_number_responder,
+                          block.up, block.down, block.total_up, block.total_down)))
 
         self.db.execute(
             u"INSERT INTO double_entry (block_hash, previous_hash_requester, public_key_requester, "
-            u"signature_requester, previous_hash_responder, public_key_responder, signature_responder, payload) "
-            u"values(?,?,?,?,?,?,?,?)",
+            u"signature_requester, previous_hash_responder, public_key_responder, signature_responder,"
+            u" sequence_number_requester, sequence_number_responder, up, down, total_up, total_down) "
+            u"values(?,?,?,?,?,?,?,?,?,?,?,?,?)",
             data)
 
         self._set_previous_id(block_id)
+        self.db.commit()
 
     def _set_previous_id(self, block_id):
         """
@@ -104,12 +123,13 @@ class Persistence:
         """
         Returns a block saved in the persistence
         :param block_id: The id of the block that needs to be retrieved.
-        :return:
         """
         self._init_database()
 
         db_result = self.db.execute(u"SELECT previous_hash_requester, public_key_requester, signature_requester,"
-                                    u" previous_hash_responder, public_key_responder, signature_responder, payload"
+                                    u" previous_hash_responder, public_key_responder, signature_responder, "
+                                    u"sequence_number_requester, sequence_number_responder,"
+                                    u" up, down, total_up, total_down"
                                     u" FROM `double_entry` WHERE block_hash = '" +
                                     encode_db(block_id) + u"' LIMIT 0,1").fetchone()
         # Decode the DB format and create a DB block
@@ -143,14 +163,34 @@ class Persistence:
         Check if a block is existent in the persistence layer based on a signature and public key pair.
         :param signature_requester: The id t hat needs to be checked.
         :return: True if the block exists, else false.
+        :rtype : bool
         """
         self._init_database()
 
         db_result = self.db.execute(u"SELECT block_hash from double_entry "
-                                    u"where public_key_requester = '" + encode_db(public_key_requester) +
+                                    u"WHERE public_key_requester == '" + encode_db(public_key_requester) +
                                     u"' and signature_requester == '" + encode_db(signature_requester) +
                                     u"' LIMIT 0,1").fetchone()
         return db_result is not None
+
+    def get_latest_sequence_number(self, public_key):
+        """
+        Return the latest sequence number known in this node.
+        If no block for the pk is know returns -1.
+        :param public_key: Corresponding public key
+        :return: sequence number (integer) or -1 if no block is known
+        """
+        self._init_database()
+
+        db_result = self.db.execute(u"SELECT MAX(sequence_number) FROM"
+                                    u"(SELECT sequence_number_requester as sequence_number FROM double_entry "
+                                    u"WHERE public_key_requester == '" + encode_db(public_key) + u"' UNION "
+                                    u"SELECT sequence_number_responder from double_entry "
+                                    u"WHERE public_key_responder = '" + encode_db(public_key) + u"')").fetchone()[0]
+        if db_result is not None:
+            return decode_db(db_result)
+        else:
+            return -1
 
     def _init_database(self):
         """
@@ -217,4 +257,9 @@ class DatabaseBlock:
         self.public_key_responder = data[4]
         self.signature_responder = data[5]
         """ Set the payload of the block """
-        self.timestamp = data[6]
+        self.sequence_number_requester = data[6]
+        self.sequence_number_responder = data[7]
+        self.up = data[8]
+        self.down = data[9]
+        self.total_up = data[10]
+        self.total_down = data[11]

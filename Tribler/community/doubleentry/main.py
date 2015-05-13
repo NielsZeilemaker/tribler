@@ -86,7 +86,7 @@ class DoubleEntry(object):
     def signature_request(self):
         """
         Instruct the community to send out a signature request.
-        """
+                        """
         self.community.publish_signature_request_message(self.community.next_candidate())
 
     def draw_community(self):

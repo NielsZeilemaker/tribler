@@ -1,19 +1,45 @@
 import unittest
 import os
-import time
+from os import path
 import random
 
-from hashlib import sha1
-from os import path
-
-from Tribler.dispersy.crypto import ECCrypto
+from test_utilities import TestBlock, DoubleEntryTestCase
 
 from Tribler.community.doubleentry.database import Persistence
 from Tribler.community.doubleentry.database import GENESIS_ID
 from Tribler.community.doubleentry.database import DATABASE_PATH
+from Tribler.community.doubleentry.database import encode_db, decode_db
 
 
-class TestPersistence(unittest.TestCase):
+class TestEncodingDatabase(unittest.TestCase):
+    """
+    Test the encoding methods for the database.
+    """
+
+    def test_encoding_decoding_int(self):
+        # Arrange
+        integer = random.randint(0, 20)
+        # Act
+        result = decode_db(encode_db(integer))
+        # Assert
+        self.assertEquals(integer, result)
+
+    def test_encoding_decoding_str(self):
+        # Arrange
+        string = "test string"
+        # Act
+        result = decode_db(encode_db(string))
+        # Assert
+        self.assertEquals(string, result)
+
+    def test_encoding_unknown_type(self):
+        # Arrange
+        unknown_type = complex(random.randint(0, 20))
+        # Act
+        self.assertRaises(TypeError, encode_db, unknown_type)
+
+
+class TestPersistence(DoubleEntryTestCase):
     """
     Tests the Persister for DoubleEntry community.
     """
@@ -32,7 +58,7 @@ class TestPersistence(unittest.TestCase):
         # Act
         result = self.persistence.get_previous_id()
         # Assert
-        assert(result == GENESIS_ID)
+        self.assertEquals(result, GENESIS_ID)
 
     def test_add_block(self):
         # Arrange
@@ -41,8 +67,9 @@ class TestPersistence(unittest.TestCase):
         # Act
         db.add_block(block1.id, block1)
         # Assert
-        assert(db.get_previous_id() == block1.id)
-        assert(db.get(block1.id).timestamp == block1.timestamp)
+        self.assertEquals(db.get_previous_id(), block1.id)
+        result = db.get(block1.id)
+        super(TestPersistence, self).assertEqual_block(block1, result)
 
     def test_add_two_blocks(self):
         # Arrange
@@ -53,77 +80,73 @@ class TestPersistence(unittest.TestCase):
         db.add_block(block1.id, block1)
         db.add_block(block2.id, block2)
         # Assert
-        assert(db.get_previous_id() == block2.id)
-        assert(db.get(block2.id).timestamp == block2.timestamp)
+        self.assertEquals(db.get_previous_id(), block2.id)
+        result = db.get(block2.id)
+        super(TestPersistence, self).assertEqual_block(block2, result)
 
     def test_contains_block_id_positive(self):
         # Arrange
         db = self.persistence
         block1 = TestBlock()
         db.add_block(block1.id, block1)
-        # Assert & Act
-        assert db.contains(block1.id)
+        # Act & Assert
+        self.assertTrue(db.contains(block1.id))
 
     def test_contains_block_id_negative(self):
         # Arrange
         db = self.persistence
-        # Assert & Act
-        assert not db.contains("NONEXISTINGID")
+        # Act & Assert
+        self.assertFalse(db.contains("NON EXISTING ID"))
 
     def test_contains_signature_pk_positive(self):
         # Arrange
         db = self.persistence
         block1 = TestBlock()
         db.add_block(block1.id, block1)
-        # Assert & Act
-        assert db.contains_signature(block1.signature_requester, block1.public_key_requester)
+        # Act & Assert
+        self.assertTrue(db.contains_signature(block1.signature_requester, block1.public_key_requester))
 
     def test_contains_signature_pk_false(self):
         # Arrange
         db = self.persistence
         block1 = TestBlock()
-        # Assert & Act
-        assert not db.contains_signature(block1.signature_requester, block1.public_key_requester)
+        # Act & Assert
+        self.assertFalse(db.contains_signature(block1.signature_requester, block1.public_key_requester))
 
+    def test_get_sequence_number_not_existing(self):
+        # Arrange
+        db = self.persistence
+        # Act & Assert
+        self.assertEquals(db.get_latest_sequence_number("NON EXISTING KEY"), -1)
 
-class TestBlock:
-    """
-    Test Class that simulates a block message used in DoubleEntry.
-    Also used in other test files for DoubleEntry.
-    """
+    def test_get_sequence_number_public_key_requester(self):
+        # Arrange
+        # Make sure that there is a responder block with a lower sequence number.
+        # To test that it will look for both responder and requester.
+        db = self.persistence
+        block1 = TestBlock()
+        db.add_block(block1.id, block1)
+        block2 = TestBlock()
+        block2.public_key_responder = block1.public_key_requester
+        block2.sequence_number_responder = block1.sequence_number_requester-5
+        db.add_block(block2.id, block2)
+        # Act & Assert
+        self.assertEquals(db.get_latest_sequence_number(block1.public_key_requester), block1.sequence_number_requester)
 
-    def __init__(self):
-        self._timestamp = time.time()
-        crypto = ECCrypto()
-        key_requester = crypto.generate_key(u"very-low")
-        key_responder = crypto.generate_key(u"very-low")
+    def test_get_sequence_number_public_key_responder(self):
+        # Arrange
+        # Make sure that there is a requester block with a lower sequence number.
+        # To test that it will look for both responder and requester.
+        db = self.persistence
+        block1 = TestBlock()
+        db.add_block(block1.id, block1)
+        block2 = TestBlock()
+        block2.public_key_requester = block1.public_key_responder
+        block2.sequence_number_requester = block1.sequence_number_responder-5
+        db.add_block(block2.id, block2)
+        # Act & Assert
+        self.assertEquals(db.get_latest_sequence_number(block1.public_key_responder), block1.sequence_number_responder)
 
-        # A random hash is generated for the previous hash. It is only used to test if a hash can be persisted.
-        self.previous_hash_requester = sha1(repr(random.randint(0, 100000))).digest()
-        self.signature_requester = crypto.create_signature(key_requester, self.timestamp)
-        self.public_key_requester = crypto.key_to_bin(key_requester.pub())
-
-        # A random hash is generated for the previous hash. It is only used to test if a hash can be persisted.
-        self.previous_hash_responder = sha1(repr(random.randint(100001, 200000))).digest()
-        self.signature_responder = crypto.create_signature(key_responder, self.timestamp)
-        self.public_key_responder = crypto.key_to_bin(key_responder.pub())
-
-    @property
-    def id(self):
-        return self.generate_hash()
-
-    @property
-    def timestamp(self):
-        return repr(self._timestamp)
-
-    def generate_hash(self):
-        # Explicit way of building the data for the hash is used.
-        # This because it is used to validate a test result in test_community
-        # and it is easier to read for the programmer this way.
-        data = (self.timestamp + "." + self.previous_hash_requester + "." + self.public_key_requester + "." +
-                self.signature_requester + "." + self. previous_hash_responder + "." + self.public_key_responder +
-                "." + self.signature_responder)
-        return sha1(data).digest()
 
 if __name__ == "__main__":
     unittest.main()

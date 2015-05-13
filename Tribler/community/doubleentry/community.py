@@ -1,4 +1,3 @@
-import time
 import logging
 import base64
 from hashlib import sha1
@@ -12,7 +11,8 @@ from Tribler.dispersy.message import Message, DropMessage
 from Tribler.dispersy.crypto import ECCrypto
 from Tribler.dispersy.conversion import DefaultConversion
 
-from Tribler.community.doubleentry.payload import SignatureRequestPayload, SignatureResponsePayload
+from Tribler.community.doubleentry.payload import SignatureRequestPayload, SignatureResponsePayload, \
+    encode_signing_format
 from Tribler.community.doubleentry.conversion import DoubleEntryConversion
 from Tribler.community.doubleentry.database import Persistence
 
@@ -97,16 +97,27 @@ class DoubleEntryCommunity(Community):
         :return: Signature_request message ready for distribution.
         """
         meta = self.get_meta_message(SIGNATURE_REQUEST)
-
-        timestamp = repr(time.time())
+        # Instantiate the data
+        # TODO
+        up = 1
+        down = 2
+        total_up = 3
+        total_down = 4
+        # Instantiate the personal information
+        sequence_number_requester = self.persistence.get_latest_sequence_number(self._public_key)
         previous_hash_requester = self.persistence.get_previous_id()
         public_key_requester = self._public_key
-        signature = ECCrypto().create_signature(self._ec, timestamp)
+
+        data_without_signature = (up, down, total_up, total_down,
+                                  sequence_number_requester, previous_hash_requester, public_key_requester)
+        # Create the signature
+        signature = ECCrypto().create_signature(self._ec, encode_signing_format(data_without_signature))
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
                             destination=(candidate,),
-                            payload=(timestamp, previous_hash_requester, public_key_requester, signature))
+                            # Append the signature to the data.
+                            payload=data_without_signature + (signature,))
         return message
 
     def validate_signature_request(self, signature_request):
@@ -119,7 +130,8 @@ class DoubleEntryCommunity(Community):
         # Check if the request is not already processed.
         return (not self.persistence.contains_signature(payload.signature_requester, payload.public_key_requester) and
                 # Check if the request is valid
-                self.validate_signature(payload.public_key_requester, payload.timestamp, payload.signature_requester))
+                self.validate_signature(payload.public_key_requester, payload.signature_data_requester(),
+                                        payload.signature_requester))
 
     def _check_signature_request(self, messages):
         """
@@ -167,24 +179,33 @@ class DoubleEntryCommunity(Community):
         :return: Signature_response message ready for distribution.
         """
         meta = self.get_meta_message(SIGNATURE_RESPONSE)
-
-        # Create the part to be signed.
-        timestamp = signature_request.payload.timestamp
+        # Instantiate the data
+        # TODO
+        up = 1
+        down = 2
+        total_up = 3
+        total_down = 4
+        sequence_number_requester = signature_request.payload.sequence_number_requester
         previous_hash_requester = signature_request.payload.previous_hash_requester
         public_key_requester = signature_request.payload.public_key_requester
         signature_requester = signature_request.payload.signature_requester
-        request = timestamp + "." + public_key_requester + "." + signature_requester
+
         # Create the personal part of the message.
+        sequence_number_responder = self.persistence.get_latest_sequence_number(self._public_key)
         previous_hash_responder = self.persistence.get_previous_id()
         public_key_responder = ECCrypto().key_to_bin(self._ec.pub())
         # Sign the request.
-        signature = ECCrypto().create_signature(self._ec, request)
+        data_without_signature = (up, down, total_up, total_down,
+                                  sequence_number_requester, previous_hash_requester, public_key_requester,
+                                  signature_requester, sequence_number_responder, previous_hash_responder,
+                                  public_key_responder)
+        signature = ECCrypto().create_signature(self._ec, encode_signing_format(data_without_signature))
 
         message = meta.impl(authentication=(self.my_member,),
                             distribution=(self.claim_global_time(),),
                             destination=(signature_request.candidate,),
-                            payload=(timestamp, previous_hash_requester, public_key_requester, signature_requester,
-                                     previous_hash_responder, public_key_responder, signature))
+                            # Append the signature to the data
+                            payload=data_without_signature + (signature,))
         return message
 
     def validate_signature_response(self, signature_response):
@@ -195,13 +216,12 @@ class DoubleEntryCommunity(Community):
         """
         payload = signature_response.payload
         # Check if the request part is valid.
-        valid_request = self.validate_signature(payload.public_key_requester, payload.timestamp,
+        valid_request = self.validate_signature(payload.public_key_requester, payload.signature_data_requester(),
                                                 payload.signature_requester)
         # Check if the response part is valid.
-        valid_response = self.validate_signature(
-            payload.public_key_responder,
-            payload.timestamp + "." + payload.public_key_requester + "." + payload.signature_requester,
-            payload.signature_responder)
+        valid_response = self.validate_signature(payload.public_key_responder, payload.signature_data_responder(),
+                                                 payload.signature_responder)
+
         # Both have to be valid.
         return valid_request and valid_response
 
@@ -256,10 +276,12 @@ class DoubleEntryCommunity(Community):
         """
         payload = message.payload
         # Prepare the data to be signed separated by '.'
-        data = (payload.timestamp,
-                payload.previous_hash_requester, payload.public_key_requester, payload.signature_requester,
-                payload.previous_hash_responder, payload.public_key_responder, payload.signature_responder)
-        data = ".".join(data)
+        data = encode_signing_format((payload.up, payload.down, payload.total_up, payload.total_down,
+                                      payload.sequence_number_requester, payload.previous_hash_requester,
+                                      payload.public_key_requester, payload.signature_requester,
+                                      payload.sequence_number_responder, payload.previous_hash_responder,
+                                      payload.public_key_responder, payload.signature_responder))
+
         # Create the hash using SHA1.
         return sha1(data).digest()
 
@@ -269,7 +291,7 @@ class DoubleEntryCommunity(Community):
         Utility method that uses a pk in binary to check
         if the pk has been used to create the signature for the payload.
         :param public_key_binary: Public Key in binary format.
-        :param payload: string that has to be signed.
+        :param payload: Iterable that had to be signed.
         :param signature: string that contains the signature.
         :return: Boolean that contains the truth value if the signature and public key correspond.
         """
@@ -291,6 +313,7 @@ class DoubleEntryCommunity(Community):
         super(DoubleEntryCommunity, self).unload_community()
         # Close the persistence layer
         self.persistence.close()
+
 
 class DoubleEntrySettings(object):
     """

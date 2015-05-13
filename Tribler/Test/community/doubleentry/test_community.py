@@ -3,7 +3,7 @@ import unittest
 from Tribler.community.doubleentry.community import DoubleEntryCommunity
 from Tribler.dispersy.crypto import ECCrypto
 
-from Tribler.Test.community.doubleentry.test_persistence import TestBlock
+from Tribler.Test.community.doubleentry.test_utilities import TestBlock
 
 
 class TestDoubleEntryCommunity(unittest.TestCase):
@@ -23,19 +23,19 @@ class TestDoubleEntryCommunity(unittest.TestCase):
         # Act
         result = DoubleEntryCommunity.validate_signature(public_key, payload, signature)
         # Assert
-        assert result
+        self.assertTrue(result)
 
     def test_validate_signature_negative(self):
         # Arrange
         key = self.crypto.generate_key(u"very-low")
         public_key = self.crypto.key_to_bin(key.pub())
         correct_payload = "testing valid signature"
-        incorrect_payload = "NOTCORRESPONDINGPAYLOADTOSIGNATURE"
+        incorrect_payload = "NOT CORRESPONDING PAYLOAD TO SIGNATURE"
         signature = self.crypto.create_signature(key, correct_payload)
         # Act
         result = DoubleEntryCommunity.validate_signature(public_key, incorrect_payload, signature)
         # Assert
-        assert not result
+        self.assertFalse(result)
 
     def test_validate_signature_incorrect_format(self):
         # Arrange
@@ -46,12 +46,13 @@ class TestDoubleEntryCommunity(unittest.TestCase):
         # Act
         result = DoubleEntryCommunity.validate_signature(private_key_format, payload, signature)
         # Assert
-        assert not result
+        self.assertFalse(result)
 
     def test_hash_signature_response(self):
         # Arrange
         message = TestMessage(TestBlock())
-        # Act
+        # Actge)
+        # Assert
         result = DoubleEntryCommunity.hash_signature_response(message)
         # Assert
         self.assertEqual(result, message.payload.id)
@@ -64,6 +65,3 @@ class TestMessage:
 
     def __init__(self, payload):
         self.payload = payload
-
-
-
