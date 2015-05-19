@@ -1,5 +1,4 @@
 # Written by Arno Bakker
-# Updated by George Milescu
 # Updated by Egbert Bouman, now using ConfigParser
 # see LICENSE.txt for license information
 """ Controls the operation of a Session """
@@ -18,9 +17,8 @@ import sys
 from distutils.spawn import find_executable
 
 from Tribler.Core.Base import Copyable, Serializable
-from Tribler.Core.RawServer.RawServer import autodetect_socket_style
 from Tribler.Core.Utilities.configparser import CallbackConfigParser
-from Tribler.Core.Utilities.network_utils import get_random_port
+from Tribler.Core.Utilities.network_utils import get_random_port, autodetect_socket_style
 from Tribler.Core.defaults import sessdefaults
 from Tribler.Core.osutils import is_android, get_appstate_dir
 from Tribler.Core.simpledefs import STATEDIR_SESSCONFIG
@@ -189,6 +187,22 @@ class SessionConfigInterface(object):
         ports = self.sessconfig.get(u'tunnel_community', u'socks5_listen_ports')
         path = u'tunnel_community~socks5_listen_ports~'
         return [self._get_random_port(path + unicode(index)) if port < 0 else port for index, port in enumerate(ports)]
+
+    def set_tunnel_community_hs_timeout_switch(self, value):
+        self.sessconfig.set(u'tunnel_community', u'hs_timeout_switch', value)
+
+    def get_tunnel_community_hs_timeout_switch(self):
+        """ Returns whether hidden services switch to anonymous downloading on timeout
+        @return Boolean. """
+        return self.sessconfig.get(u'tunnel_community', u'hs_timeout_switch')
+
+    def set_tunnel_community_exitnode_enabled(self, value):
+        self.sessconfig.set(u'tunnel_community', u'exitnode_enabled', value)
+
+    def get_tunnel_community_exitnode_enabled(self):
+        """ Returns whether being an exitnode is allowed
+        @return Boolean. """
+        return self.sessconfig.get(u'tunnel_community', u'exitnode_enabled')
 
     def get_listen_port(self):
         """ Returns the current UDP/TCP listen port.
@@ -397,17 +411,6 @@ class SessionConfigInterface(object):
         """ Returns whether to check health of collected torrents.
         @return Boolean. """
         return self.sessconfig.get(u'torrent_checking', u'enabled')
-
-    def set_torrent_checking_period(self, value):
-        """ Interval between automatic torrent health checks.
-        @param value An interval in seconds.
-        """
-        self.sessconfig.set(u'torrent_checking', u'torrent_checking_period', value)
-
-    def get_torrent_checking_period(self):
-        """ Returns the check interval.
-        @return A number of seconds. """
-        return self.sessconfig.get(u'torrent_checking', u'torrent_checking_period')
 
     def set_stop_collecting_threshold(self, value):
         """ Stop collecting more torrents if the disk has less than this limit

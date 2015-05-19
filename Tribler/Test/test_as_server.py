@@ -99,6 +99,7 @@ class AbstractServer(BaseTestCase):
             for dc in delayed_calls:
                 self._logger.debug(">     %s" % dc)
         self.assertFalse(delayed_calls, "The reactor was dirty when tearing down the test")
+        self.assertFalse(Session.has_instance(), 'A session instance is still present when tearing down the test')
 
     def tearDownCleanup(self):
         self.setUpCleanup()
@@ -301,11 +302,13 @@ class TestGuiAsServer(TestAsServer):
     """
 
     def setUp(self):
+        self.assertFalse(Session.has_instance(), 'A session instance is already present when setting up the test')
         AbstractServer.setUp(self, annotate=False)
 
         self.app = wx.GetApp()
         if not self.app:
-            self.app = wx.PySimpleApp(redirect=False)
+            from Tribler.Main.tribler_main import TriblerApp
+            self.app = TriblerApp(redirect=False)
 
         self.guiUtility = None
         self.frame = None

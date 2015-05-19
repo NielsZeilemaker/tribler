@@ -36,13 +36,9 @@ original_open_https = urllib.URLopener.open_https
 import M2Crypto  # Not a useless import! See above.
 urllib.URLopener.open_https = original_open_https
 
-# modify the sys.stderr and sys.stdout for safe output
-import Tribler.Debug.console
-
 import os
 from Tribler.Main.Utility.GuiDBHandler import startWorker, GUIDBProducer
 from Tribler.dispersy.util import attach_profiler, call_on_reactor_thread
-from Tribler.community.bartercast3.community import MASTER_MEMBER_PUBLIC_KEY_DIGEST as BARTER_MASTER_MEMBER_PUBLIC_KEY_DIGEST
 from Tribler.Core.CacheDB.Notifier import Notifier
 import traceback
 from random import randint
@@ -80,10 +76,7 @@ from Tribler.Main.Utility.utility import Utility
 from Tribler.Main.Utility.Feeds.rssparser import RssParser
 
 from Tribler.Category.Category import Category
-from Tribler.Policies.RateManager import UserDefinedMaxAlwaysOtherwiseDividedOverActiveSwarmsRateManager
-from Tribler.Policies.SeedingManager import GlobalSeedingManager
-from Tribler.Utilities.Instance2Instance import (Instance2InstanceClient, Instance2InstanceServer,
-                                                 InstanceConnectionHandler)
+from Tribler.Utilities.Instance2Instance import Instance2InstanceClient, Instance2InstanceServer
 from Tribler.Utilities.SingleInstanceChecker import SingleInstanceChecker
 
 from Tribler.Core.simpledefs import (UPLOAD, DOWNLOAD, NTFY_MODIFIED, NTFY_INSERT, NTFY_REACHABLE, NTFY_ACTIVITIES,
@@ -127,6 +120,7 @@ ALLOW_MULTIPLE = os.environ.get("TRIBLER_ALLOW_MULTIPLE", "False").lower() == "t
 SKIP_TUNNEL_DIALOG = os.environ.get("TRIBLER_SKIP_OPTIN_DLG", "False") == "True"
 # used by the anon tunnel tests as there's no way to mess with the Session before running the test ATM.
 FORCE_ENABLE_TUNNEL_COMMUNITY = False
+TUNNEL_COMMUNITY_DO_TEST = True
 
 #
 #
@@ -166,8 +160,6 @@ class ABCApp(object):
         self.barter_community = None
         self.tunnel_community = None
 
-        self.seedingmanager = None
-        self.i2is = None
         self.torrentfeed = None
         self.webUI = None
         self.utility = None
@@ -225,9 +217,8 @@ class ABCApp(object):
 
                 cat.set_family_filter(True)
 
-            # Create global rate limiter
-            self.splash.tick('Setting up ratelimiters')
-            self.ratelimiter = UserDefinedMaxAlwaysOtherwiseDividedOverActiveSwarmsRateManager(s)
+            # Create global speed limits
+            self.splash.tick('Setting up speed limits')
 
             # Counter to suppress some event from occurring
             self.ratestatecallbackcount = 0
@@ -236,12 +227,10 @@ class ABCApp(object):
             self.lastwantpeers = []
 
             maxup = self.utility.read_config('maxuploadrate')
-            self.ratelimiter.set_global_max_speed(UPLOAD, maxup)
-
             maxdown = self.utility.read_config('maxdownloadrate')
-            self.ratelimiter.set_global_max_speed(DOWNLOAD, maxdown)
-
-            self.seedingmanager = GlobalSeedingManager(self.utility.read_config)
+            # set speed limits using LibtorrentMgr
+            s.set_max_upload_speed(maxup)
+            s.set_max_download_speed(maxdown)
 
             # Only allow updates to come in after we defined ratelimiter
             self.prevActiveDownloads = []
@@ -254,9 +243,7 @@ class ABCApp(object):
             if not ALLOW_MULTIPLE:
                 # Put it here so an error is shown in the startup-error popup
                 # Start server for instance2instance communication
-                self.i2iconnhandler = InstanceConnectionHandler(self.i2ithread_readlinecallback)
-                self.i2is = Instance2InstanceServer(self.utility.read_config('i2ilistenport'), self.i2iconnhandler)
-                self.i2is.start()
+                Instance2InstanceServer(self.utility.read_config('i2ilistenport'), self.i2ithread_readlinecallback)
 
             self.splash.tick('GUIUtility register')
             self.guiUtility.register()
@@ -519,7 +506,8 @@ class ABCApp(object):
             if self.sconfig.get_tunnel_community_enabled():
                 keypair = dispersy.crypto.generate_key(u"curve25519")
                 dispersy_member = dispersy.get_member(private_key=dispersy.crypto.key_to_bin(keypair),)
-                settings = TunnelSettings(session.get_install_dir())
+                settings = TunnelSettings(session.get_install_dir(), tribler_session=session)
+                settings.do_test = TUNNEL_COMMUNITY_DO_TEST
                 tunnel_kwargs = {'tribler_session': session, 'settings': settings}
 
                 self.tunnel_community = dispersy.define_auto_load(HiddenTunnelCommunity, dispersy_member, load=True,
@@ -623,11 +611,6 @@ class ABCApp(object):
             startWorker(do_wx, do_db, uId=u"tribler.set_reputation")
         startWorker(None, self.set_reputation, delay=5.0, workerType="guiTaskQueue")
 
-    def _dispersy_get_barter_community(self):
-        try:
-            return self.dispersy.get_community(BARTER_MASTER_MEMBER_PUBLIC_KEY_DIGEST, load=False, auto_load=False)
-        except KeyError:
-            return None
 
     def sesscb_states_callback(self, dslist):
         if not self.ready:
@@ -694,25 +677,13 @@ class ABCApp(object):
             if doCheckpoint:
                 self.utility.session.checkpoint()
 
-            self.seedingmanager.apply_seeding_policy(no_collected_list)
-
             # Adjust speeds and call TunnelCommunity.monitor_downloads once every 4 seconds
             adjustspeeds = False
             if self.ratestatecallbackcount % 4 == 0:
                 adjustspeeds = True
 
-            if adjustspeeds:
-                self.ratelimiter.adjust_speeds()
-
-                if DEBUG_DOWNLOADS:
-                    for ds in dslist:
-                        tdef = ds.get_download().get_def()
-                        state = ds.get_status()
-                        self._logger.debug(u"tribler: BT %s %s %s", dlstatus_strings[state], tdef.get_name(),
-                                           ds.get_current_speed(UPLOAD))
-
-                if self.tunnel_community:
-                    self.tunnel_community.monitor_downloads(dslist)
+            if adjustspeeds and self.tunnel_community:
+                self.tunnel_community.monitor_downloads(dslist)
 
         except:
             print_exc()
@@ -933,11 +904,6 @@ class ABCApp(object):
 
         win.ShowModal()
 
-    def MacOpenFile(self, filename):
-        self._logger.info(repr(filename))
-        target = FileDropTarget(self.frame)
-        target.OnDropFiles(None, None, [filename])
-
     @forceWxThread
     def OnExit(self):
         bm = self.gui_image_manager.getImage(u'closescreen.png')
@@ -958,8 +924,6 @@ class ABCApp(object):
 
         # write all persistent data to disk
         self.closewindow.tick('Write all persistent data to disk')
-        if self.i2is:
-            self.i2is.shutdown()
         if self.torrentfeed:
             self.torrentfeed.shutdown()
             self.torrentfeed.delInstance()
@@ -1075,6 +1039,22 @@ class ABCApp(object):
             wx.CallAfter(start_asked_download)
 
 
+class TriblerApp(wx.App):
+
+    def __init__(self, *args, **kwargs):
+        wx.App.__init__(self, *args, **kwargs)
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._abcapp = None
+
+    def set_abcapp(self, abcapp):
+        self._abcapp = abcapp
+
+    def MacOpenFile(self, filename):
+        self._logger.info(repr(filename))
+        target = FileDropTarget(self._abcapp.frame)
+        target.OnDropFiles(None, None, [filename])
+
+
 #
 #
 # Main Program Start Here
@@ -1099,13 +1079,8 @@ def run(params=None, autoload_discovery=True, use_torrent_search=True, use_chann
             # Send  torrent info to abc single instance
             if params[0] != "":
                 torrentfilename = params[0]
-                i2ic = Instance2InstanceClient(
-                    Utility(
-                        installdir,
-                        statedir).read_config(
-                            'i2ilistenport'),
-                    'START',
-                    torrentfilename)
+                i2i_port = Utility(installdir, statedir).read_config('i2ilistenport')
+                i2ic = Instance2InstanceClient(i2i_port, 'START', torrentfilename)
 
             logger.info("Client shutting down. Detected another instance.")
         else:
@@ -1124,9 +1099,10 @@ def run(params=None, autoload_discovery=True, use_torrent_search=True, use_chann
             # Launch first abc single instance
             app = wx.GetApp()
             if not app:
-                app = wx.PySimpleApp(redirect=False)
+                app = TriblerApp(redirect=False)
             abc = ABCApp(params, installdir, autoload_discovery=autoload_discovery,
                          use_torrent_search=use_torrent_search, use_channel_search=use_channel_search)
+            app.set_abcapp(abc)
             if abc.frame:
                 app.SetTopWindow(abc.frame)
                 abc.frame.set_wxapp(app)

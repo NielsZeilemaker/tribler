@@ -1,19 +1,21 @@
 # Written by Egbert Bouman
-import os
-import time
 import binascii
 import logging
+import os
 import threading
-import libtorrent as lt
-
+import time
+from binascii import hexlify
 from copy import deepcopy
 from shutil import rmtree
 
-from Tribler.Core.version import version_id
-from Tribler.Core.exceptions import DuplicateDownloadException
-from Tribler.Core.Utilities.utilities import parse_magnetlink
+import libtorrent as lt
+
 from Tribler.Core.CacheDB.Notifier import Notifier
-from Tribler.Core.simpledefs import NTFY_MAGNET_STARTED, NTFY_TORRENTS, NTFY_MAGNET_CLOSE, NTFY_MAGNET_GOT_PEERS
+from Tribler.Core.Utilities.utilities import parse_magnetlink
+from Tribler.Core.exceptions import DuplicateDownloadException
+from Tribler.Core.simpledefs import NTFY_MAGNET_CLOSE, NTFY_MAGNET_GOT_PEERS, NTFY_MAGNET_STARTED, NTFY_TORRENTS
+from Tribler.Core.version import version_id
+
 
 DEBUG = False
 DHTSTATE_FILENAME = "ltdht.state"
@@ -68,6 +70,10 @@ class LibtorrentMgr(object):
             enable_utp = self.trsession.get_libtorrent_utp()
             settings.enable_outgoing_utp = enable_utp
             settings.enable_incoming_utp = enable_utp
+
+            pe_settings = lt.pe_settings()
+            pe_settings.prefer_rc4 = True
+            ltsession.set_pe_settings(pe_settings)
         else:
             settings.enable_outgoing_utp = True
             settings.enable_incoming_utp = True
@@ -125,22 +131,6 @@ class LibtorrentMgr(object):
             self.ltsessions[hops] = self.create_session(hops)
 
         return self.ltsessions[hops]
-
-    def tunnels_ready(self, download):
-        hops = download.get_hops()
-        if hops > 0:
-            tunnel_community = self.trsession.lm.tunnel_community
-            if tunnel_community:
-                if download.get_def().is_anonymous():
-                    current_hops = tunnel_community.circuits_needed.get(hops, 0)
-                    tunnel_community.circuits_needed[hops] = max(1, current_hops)
-                    return bool(tunnel_community.active_data_circuits(hops))
-                else:
-                    tunnel_community.circuits_needed[hops] = tunnel_community.settings.max_circuits
-                    return min(1, len(tunnel_community.active_data_circuits(hops)) /
-                               float(tunnel_community.settings.min_circuits))
-            return 0
-        return 1
 
     def shutdown(self):
         # Save DHT state
@@ -285,7 +275,7 @@ class LibtorrentMgr(object):
                 if infohash in self.torrents:
                     self.torrents[infohash][0].process_alert(alert, alert_type)
                 elif infohash in self.metainfo_requests:
-                    if type(alert) == lt.metadata_received_alert:
+                    if isinstance(alert, lt.metadata_received_alert):
                         self.got_metainfo(infohash)
                 else:
                     self._logger.debug("could not find torrent %s", infohash)
@@ -318,10 +308,10 @@ class LibtorrentMgr(object):
         else:
             self.trsession.lm.rawserver.add_task(self.monitor_dht, 10)
 
-    def get_peers(self, infohash, callback, timeout=30):
+    def get_peers(self, infohash, callback, timeout=30, timeout_callback=None):
         def on_metainfo_retrieved(metainfo, infohash=infohash, callback=callback):
             callback(infohash, metainfo.get('initial peers', []))
-        self.get_metainfo(infohash, on_metainfo_retrieved, timeout, notify=False)
+        self.get_metainfo(infohash, on_metainfo_retrieved, timeout, timeout_callback=timeout_callback, notify=False)
 
     def get_metainfo(self, infohash_or_magnet, callback, timeout=30, timeout_callback=None, notify=True):
         if not self.is_dht_ready() and timeout > 5:
@@ -352,7 +342,16 @@ class LibtorrentMgr(object):
                     atp['url'] = magnet
                 else:
                     atp['info_hash'] = lt.big_number(infohash_bin)
-                handle = self.get_session().add_torrent(encode_atp(atp))
+                try :
+                    handle = self.get_session().add_torrent(encode_atp(atp))
+                except TypeError, e:
+                    self._logger.warning("Failed to add torrent with infohash %s, using libtorrent version %s, "
+                                         "attempting to use it as it is and hoping for the better",
+                                         hexlify(infohash_bin), lt.version)
+                    self._logger.warning("Error was: %s", e)
+                    atp['info_hash'] = infohash_bin
+                    handle = self.get_session().add_torrent(encode_atp(atp))
+
                 if notify:
                     self.notifier.notify(NTFY_TORRENTS, NTFY_MAGNET_STARTED, infohash_bin)
 
@@ -388,17 +387,27 @@ class LibtorrentMgr(object):
                     if callbacks and not timeout:
                         metainfo = {"info": lt.bdecode(handle.get_torrent_info().metadata())}
                         trackers = [tracker.url for tracker in handle.get_torrent_info().trackers()]
-                        peers = [peer.ip for peer in handle.get_peer_info()]
+                        peers = []
+                        leechers = 0
+                        seeders = 0
+                        for peer in handle.get_peer_info():
+                            peers.append(peer.ip)
+                            if peer.progress == 1:
+                                seeders += 1
+                            else:
+                                leechers += 1
+
                         if trackers:
                             if len(trackers) > 1:
                                 metainfo["announce-list"] = [trackers]
                             metainfo["announce"] = trackers[0]
                         else:
                             metainfo["nodes"] = []
-                        if peers:
-                            metainfo["initial peers"] = peers
-                            if notify:
-                                self.notifier.notify(NTFY_TORRENTS, NTFY_MAGNET_GOT_PEERS, infohash_bin, len(peers))
+                        if peers and notify:
+                            self.notifier.notify(NTFY_TORRENTS, NTFY_MAGNET_GOT_PEERS, infohash_bin, len(peers))
+                        metainfo["initial peers"] = peers
+                        metainfo["leechers"] = leechers
+                        metainfo["seeders"] = seeders
 
                         self._add_cached_metainfo(infohash, metainfo)
 

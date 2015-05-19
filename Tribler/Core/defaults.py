@@ -1,5 +1,4 @@
 # Written by Arno Bakker and Bram Cohen
-# Updated by George Milescu
 # Updated by Egbert Bouman, added subsection names + using OrderedDict + cleanup
 # see LICENSE.txt for license information
 
@@ -32,9 +31,9 @@ DEFAULTPORT = 7760
 #  Version 2: as released in Tribler 4.5.0
 #  Version 3: cleanup unused params
 #  Version 4: remove swift
-#
+#  Version 7: exitnode optin switch added
 
-SESSDEFAULTS_VERSION = 7
+SESSDEFAULTS_VERSION = 8
 sessdefaults = OrderedDict()
 
 # General Tribler settings
@@ -73,6 +72,9 @@ sessdefaults['tunnel_community'] = OrderedDict()
 sessdefaults['tunnel_community']['optin_dialog_shown'] = False
 sessdefaults['tunnel_community']['enabled'] = False
 sessdefaults['tunnel_community']['socks5_listen_ports'] = [-1] * 5
+sessdefaults['tunnel_community']['exitnode_enabled'] = False
+sessdefaults['tunnel_community']['hs_timeout_switch'] = True
+
 
 # Mainline DHT settings
 sessdefaults['mainline_dht'] = OrderedDict()
@@ -82,8 +84,6 @@ sessdefaults['mainline_dht']['mainline_dht_port'] = -1
 # Torrent checking settings
 sessdefaults['torrent_checking'] = OrderedDict()
 sessdefaults['torrent_checking']['enabled'] = 1
-# will be changed to min(max(86400/ntorrents, 15), 300) at runtime
-sessdefaults['torrent_checking']['torrent_checking_period'] = 31
 
 # Torrent store settings
 sessdefaults['torrent_store'] = OrderedDict()
@@ -139,8 +139,9 @@ sessdefaults['video']['preferredmode'] = PLAYBACKMODE_INTERNAL
 #  Version 10: add default anonymous level
 #  Version 11: remove createmerkletorrent, torrentsigkeypairfilename, makehash_md5, makehash_crc32, makehash_sha1
 #  Version 12: remove thumb
+#  Version 13: remove super_seeder
 
-DLDEFAULTS_VERSION = 11
+DLDEFAULTS_VERSION = 13
 dldefaults = OrderedDict()
 
 # General download settings
@@ -149,7 +150,6 @@ dldefaults['downloadconfig']['version'] = DLDEFAULTS_VERSION
 dldefaults['downloadconfig']['saveas'] = None  # Set to get_default_destdir()
 dldefaults['downloadconfig']['max_upload_rate'] = 0
 dldefaults['downloadconfig']['max_download_rate'] = 0
-dldefaults['downloadconfig']['super_seeder'] = 0
 dldefaults['downloadconfig']['mode'] = 0
 dldefaults['downloadconfig']['hops'] = 0
 dldefaults['downloadconfig']['selected_files'] = []

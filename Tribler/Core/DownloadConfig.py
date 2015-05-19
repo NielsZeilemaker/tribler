@@ -1,5 +1,4 @@
 # Written by Arno Bakker
-# Updated by George Milescu
 # Updated by Egbert Bouman, now using ConfigParser
 # see LICENSE.txt for license information
 
@@ -146,18 +145,6 @@ class DownloadConfigInterface(object):
             return self.dlconfig.get('downloadconfig', 'max_upload_rate')
         else:
             return self.dlconfig.get('downloadconfig', 'max_download_rate')
-
-    def set_super_seeder(self, value):
-        """ whether to use special upload-efficiency-maximizing routines (only
-        for dedicated seeds).
-        @param value Boolean
-        """
-        self.dlconfig.set('downloadconfig', 'super_seeder', value)
-
-    def get_super_seeder(self):
-        """ Returns hether super seeding is enabled.
-        @return Boolean. """
-        return self.dlconfig.get('downloadconfig', 'super_seeder')
 
 
 class DownloadStartupConfig(DownloadConfigInterface, Serializable, Copyable):

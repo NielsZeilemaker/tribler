@@ -75,18 +75,6 @@ class BarterCommunity(Community):
     def initiate_conversions(self):
         return [DefaultConversion(self), StatisticsConversion(self)]
 
-    @property
-    def dispersy_sync_response_limit(self):
-        return 1
-
-    @property
-    def dispersy_sync_skip_enable(self):
-        return False
-
-    @property
-    def dispersy_sync_cache_enable(self):
-        return False
-
     def create_stats_request(self, candidate, stats_type):
         log.msg("Creating stats-request for type %d to member: %s" % (stats_type, candidate._association.mid.encode("hex")))
         meta = self.get_meta_message(u"stats-request")
@@ -139,13 +127,24 @@ class BarterCommunity(Community):
             for r in message.payload.records:
                 _barter_statistics.log_interaction(self._dispersy,
                                                            message.payload.stats_type,
-                                                           message.authentication.member.mid.encode('hex'),
+                                                           "%s:%s" % (message.candidate.sock_addr[0], message.candidate.sock_addr[1]),
                                                            r[0], int(r[1].encode('hex'), 16))
 
     # bartercast accounting stuff
     def backup_bartercast_statistics(self):
         self._logger.debug("merging bartercast statistics")
-        _barter_statistics.persist(self, 1)
+        _barter_statistics.persist(self, self._dispersy)
+
+    def unload_community(self):
+        self._logger.debug("unloading the Barter4 community")
+        # store last cached statistics
+        # this screws up for some reason so disable for now...
+        # TODO we lose only a small part (max 2 minutes) of statistics but should be fixed
+        # self.backup_bartercast_statistics()
+
+        # close database
+        _barter_statistics.close()
+        super(BarterCommunity, self).unload_community()
 
 
 class BarterCommunityCrawler(BarterCommunity):
