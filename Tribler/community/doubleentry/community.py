@@ -29,7 +29,7 @@ class DoubleEntryCommunity(Community):
         super(DoubleEntryCommunity, self).__init__(*args, **kwargs)
         self._logger = logging.getLogger(self.__class__.__name__)
 
-        self._ec = self._my_member._ec
+        self._ec = self.my_member.private_key
         self._public_key = ECCrypto().key_to_bin(self._ec.pub())
         self.persistence = Persistence(self.dispersy.working_directory)
         self.candidate_queue = []
