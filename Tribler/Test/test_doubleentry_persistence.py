@@ -3,11 +3,9 @@ import os
 from os import path
 import random
 
-from test_utilities import TestBlock, DoubleEntryTestCase
-
+from Tribler.Test.test_doubleentry_utilities import TestBlock, DoubleEntryTestCase
 from Tribler.community.doubleentry.database import Persistence
-from Tribler.community.doubleentry.database import GENESIS_ID
-from Tribler.community.doubleentry.database import DATABASE_PATH
+from Tribler.community.doubleentry.database import GENESIS_ID, DATABASE_PATH
 from Tribler.community.doubleentry.database import encode_db, decode_db
 
 

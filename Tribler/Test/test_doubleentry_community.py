@@ -2,8 +2,7 @@ import unittest
 
 from Tribler.community.doubleentry.community import DoubleEntryCommunity
 from Tribler.dispersy.crypto import ECCrypto
-
-from Tribler.Test.community.doubleentry.test_utilities import TestBlock
+from Tribler.Test.test_doubleentry_utilities import TestBlock
 
 
 class TestDoubleEntryCommunity(unittest.TestCase):

@@ -1,13 +1,10 @@
 import logging
 from hashlib import sha1
 
-from Tribler.Test.community.doubleentry.test_utilities import TestBlock, DoubleEntryTestCase
-
+from Tribler.Test.test_doubleentry_utilities import TestBlock, DoubleEntryTestCase
 from Tribler.community.doubleentry.conversion import DoubleEntryConversion
 from Tribler.community.doubleentry.community import SIGNATURE_REQUEST, SIGNATURE_RESPONSE
 from Tribler.community.doubleentry.payload import SignatureRequestPayload, SignatureResponsePayload
-
-
 from Tribler.dispersy.community import Community
 from Tribler.dispersy.authentication import NoAuthentication
 from Tribler.dispersy.resolution import PublicResolution
@@ -15,7 +12,6 @@ from Tribler.dispersy.distribution import DirectDistribution
 from Tribler.dispersy.destination import CandidateDestination
 from Tribler.dispersy.message import Message
 from Tribler.dispersy.conversion import DefaultConversion
-
 from Tribler.dispersy.crypto import ECCrypto
 
 
