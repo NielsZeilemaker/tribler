@@ -27,8 +27,9 @@ def decode_db(db_object):
         raise TypeError("object from database has unknown type.")
 
 
+DATABASE_DIRECTORY = path.join(u"sqlite")
 """ Path to the database location + dispersy._workingdirectory"""
-DATABASE_PATH = path.join(u"sqlite", u"doubleentry.db")
+DATABASE_PATH = path.join(DATABASE_DIRECTORY, u"doubleentry.db")
 """ ID of the first block of the chain. """
 GENESIS_ID = "GENESIS_ID"
 """ Version to keep track if the db schema needs to be updated."""

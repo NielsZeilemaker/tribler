@@ -5,7 +5,7 @@ import random
 
 from Tribler.Test.test_doubleentry_utilities import TestBlock, DoubleEntryTestCase
 from Tribler.community.doubleentry.database import Persistence
-from Tribler.community.doubleentry.database import GENESIS_ID, DATABASE_PATH
+from Tribler.community.doubleentry.database import GENESIS_ID, DATABASE_DIRECTORY, DATABASE_PATH
 from Tribler.community.doubleentry.database import encode_db, decode_db
 
 
@@ -48,9 +48,14 @@ class TestPersistence(DoubleEntryTestCase):
 
         self.persistence = Persistence(os.path.dirname(os.path.abspath(__file__)))
 
+    def setUp(self):
+        if not os.path.exists(DATABASE_DIRECTORY):
+            os.makedirs(DATABASE_DIRECTORY)
+
     def tearDown(self):
         self.persistence.close()
         os.remove(path.join(os.path.dirname(os.path.abspath(__file__)), DATABASE_PATH))
+        os.rmdir(path.join(os.path.dirname(os.path.abspath(__file__)), DATABASE_DIRECTORY))
 
     def test_genesis_block(self):
         # Act
