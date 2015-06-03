@@ -1,6 +1,5 @@
 import unittest
 import os
-from os import path
 import random
 
 from Tribler.Test.test_doubleentry_utilities import TestBlock, DoubleEntryTestCase
@@ -46,16 +45,17 @@ class TestPersistence(DoubleEntryTestCase):
         super(TestPersistence, self).__init__(*args, **kwargs)
         self.public_key = "own_key"
 
-        self.persistence = Persistence(os.path.dirname(os.path.abspath(__file__)))
+        self.persistence = Persistence(self.getStateDir())
 
     def setUp(self):
-        if not os.path.exists(DATABASE_DIRECTORY):
-            os.makedirs(DATABASE_DIRECTORY)
+        path = os.path.join(self.getStateDir(), DATABASE_DIRECTORY)
+        if not os.path.exists(path):
+            os.makedirs(path)
 
     def tearDown(self):
         self.persistence.close()
-        os.remove(path.join(os.path.dirname(os.path.abspath(__file__)), DATABASE_PATH))
-        os.rmdir(path.join(os.path.dirname(os.path.abspath(__file__)), DATABASE_DIRECTORY))
+        os.remove(os.path.join(self.getStateDir(), DATABASE_PATH))
+        os.rmdir(os.path.join(self.getStateDir(), DATABASE_DIRECTORY))
 
     def test_genesis_block(self):
         # Act
@@ -149,7 +149,3 @@ class TestPersistence(DoubleEntryTestCase):
         db.add_block(block2.id, block2)
         # Act & Assert
         self.assertEquals(db.get_latest_sequence_number(block1.public_key_responder), block1.sequence_number_responder)
-
-
-if __name__ == "__main__":
-    unittest.main()

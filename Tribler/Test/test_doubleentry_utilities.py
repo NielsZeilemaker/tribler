@@ -3,13 +3,14 @@ File containing utilities used in testing the double entry community.
 """
 
 import random
-import unittest
 
 from hashlib import sha1
 
 from Tribler.dispersy.crypto import ECCrypto
 
 from Tribler.community.doubleentry.payload import encode_signing_format
+
+from Tribler.Test.test_as_server import AbstractServer
 
 
 class TestBlock:
@@ -70,7 +71,7 @@ class TestBlock:
         return sha1(data).digest()
 
 
-class DoubleEntryTestCase(unittest.TestCase):
+class DoubleEntryTestCase(AbstractServer):
 
     def assertEqual_block(self, expected_block, actual_block):
         """
