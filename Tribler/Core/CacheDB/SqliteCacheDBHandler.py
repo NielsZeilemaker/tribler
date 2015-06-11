@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 from copy import deepcopy
+from pprint import pformat
 from struct import unpack_from
 from threading import Lock
 from time import time
@@ -384,13 +385,18 @@ class TorrentDBHandler(BasicDBHandler):
         return self.getTorrentIDS([infohash, ]).get(infohash)
 
     def getTorrentIDS(self, infohashes):
-        to_select = []
+        assert len(infohashes) == len(set(infohashes)), sorted([bin2str(infohash) for infohash in infohashes])
 
+        to_return = {}
+
+        to_select = []
         for infohash in infohashes:
             assert isinstance(infohash, str), "INFOHASH has invalid type: %s" % type(infohash)
             assert len(infohash) == INFOHASH_LENGTH, "INFOHASH has invalid length: %d" % len(infohash)
 
-            if infohash not in self.infohash_id:
+            if infohash in self.infohash_id:
+                to_return[infohash] = self.infohash_id[infohash]
+            else:
                 to_select.append(bin2str(infohash))
 
         parameters = '?,' * len(to_select)
@@ -400,9 +406,18 @@ class TorrentDBHandler(BasicDBHandler):
         for torrent_id, infohash in torrents:
             self.infohash_id[str2bin(infohash)] = torrent_id
 
-        to_return = {}
         for infohash in infohashes:
-            to_return[infohash] = self.infohash_id.get(infohash)
+            if infohash not in to_return:
+                to_return[infohash] = self.infohash_id.get(infohash)
+
+        if __debug__ and len(to_return) != len(infohashes):
+            self._logger.error("to_return doesn't match infohashes:")
+            self._logger.error("to_return:")
+            self._logger.error(pformat(to_return))
+            self._logger.error("infohashes:")
+            self._logger.error(pformat([bin2str(infohash) for infohash in infohashes]))
+            assert len(to_return) == len(infohashes), (len(to_return), len(infohashes))
+
         return to_return
 
     def getInfohash(self, torrent_id):

@@ -28,8 +28,7 @@ class SaveAs(wx.Dialog):
 
         self.guiutility = GUIUtility.getInstance()
         self.utility = self.guiutility.utility
-        self.tunnel_community_enabled = self.utility.session.get_tunnel_community_enabled()
-        self.SetSize((600, 550 if self.tunnel_community_enabled else 450))
+        self.SetSize((600, 550))
 
         self.filehistory = []
         try:
@@ -82,10 +81,15 @@ class SaveAs(wx.Dialog):
 
         vSizer.Add(hSizer, 0, wx.EXPAND | wx.BOTTOM, 3)
 
+        self.cancel = wx.Button(self, wx.ID_CANCEL)
+        self.cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
+
+        self.ok = wx.Button(self, wx.ID_OK)
+        self.ok.Bind(wx.EVT_BUTTON, self.OnOk)
+
         self.anonimity_dialog = None
-        if self.tunnel_community_enabled:
-            self.anonimity_dialog = AnonymityDialog(self)
-            vSizer.Add(self.anonimity_dialog, 0, wx.EXPAND, 3)
+        self.anonimity_dialog = AnonymityDialog(self)
+        vSizer.Add(self.anonimity_dialog, 0, wx.EXPAND, 3)
 
         self.Bind(EVT_COLLECTED, self.OnCollected)
 
@@ -105,7 +109,7 @@ class SaveAs(wx.Dialog):
             sizer.Add(ag, 0, wx.ALIGN_CENTER_VERTICAL)
             sizer.AddStretchSpacer()
             vSizer.Add(sizer, 1, wx.EXPAND | wx.BOTTOM, 3)
-            self.SetSize((600, 385 if self.tunnel_community_enabled else 185))
+            self.SetSize((600, 285))
 
             # convert tdef into guidbtuple, and collect it using torrentsearch_manager.downloadTorrentfileFromPeers
             torrent = Torrent.fromTorrentDef(tdef)
@@ -121,15 +125,9 @@ class SaveAs(wx.Dialog):
             cb = lambda torrent_filename, saveas_id = self.Id: callback(saveas_id, torrent_filename)
             torrentsearch_manager.downloadTorrentfileFromPeers(torrent, cb)
 
-        cancel = wx.Button(self, wx.ID_CANCEL)
-        cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
-
-        ok = wx.Button(self, wx.ID_OK)
-        ok.Bind(wx.EVT_BUTTON, self.OnOk)
-
         bSizer = wx.StdDialogButtonSizer()
-        bSizer.AddButton(cancel)
-        bSizer.AddButton(ok)
+        bSizer.AddButton(self.cancel)
+        bSizer.AddButton(self.ok)
         bSizer.Realize()
         vSizer.Add(bSizer, 0, wx.EXPAND | wx.BOTTOM, 3)
 
@@ -191,7 +189,7 @@ class SaveAs(wx.Dialog):
     def OnCollected(self, event):
         tdef = event.tdef
         self.collected = tdef
-        self.SetSize((600, 575 if self.tunnel_community_enabled else 475))
+        self.SetSize((600, 550))
         vSizer = self.GetSizer().GetItem(0).GetSizer()
         hsizer = vSizer.GetItem(len(vSizer.GetChildren()) - 2).GetSizer()
         self.Freeze()
@@ -230,11 +228,8 @@ class SaveAs(wx.Dialog):
                 return files
         return None
 
-    def GetHops(self):
-        return self.anonimity_dialog.GetExitnodesHops() if self.anonimity_dialog else 0
-
-    def UseHiddenservices(self):
-        return self.anonimity_dialog.GetEndToEndValue() if self.anonimity_dialog else False
+    def UseTunnels(self):
+        return self.anonimity_dialog and self.anonimity_dialog.UseTunnels()
 
     def OnOk(self, event=None):
         if self.listCtrl:

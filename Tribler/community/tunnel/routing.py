@@ -3,6 +3,7 @@ import time
 from Tribler.community.tunnel import CIRCUIT_STATE_READY, CIRCUIT_STATE_BROKEN, CIRCUIT_STATE_EXTENDING, \
     CIRCUIT_TYPE_DATA
 from Tribler.dispersy.crypto import LibNaCLPK
+import logging
 
 __author__ = 'chris'
 
@@ -12,7 +13,8 @@ class Circuit(object):
     """ Circuit data structure storing the id, state and hops """
 
     def __init__(self, circuit_id, goal_hops=0, first_hop=None, proxy=None,
-                 ctype=CIRCUIT_TYPE_DATA, callback=None, required_exit=None, mid=None):
+                 ctype=CIRCUIT_TYPE_DATA, callback=None, required_endpoint=None,
+                 mid=None, info_hash=None):
         """
         Instantiate a new Circuit data structure
         :type proxy: TunnelCommunity
@@ -42,9 +44,12 @@ class Circuit(object):
         self.proxy = proxy
         self.ctype = ctype
         self.callback = callback
-        self.required_exit = required_exit
+        self.required_endpoint = required_endpoint
         self.mid = mid
         self.hs_session_keys = None
+        self.info_hash = info_hash
+
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
     def hops(self):

@@ -85,6 +85,7 @@ class TriblerLaunchMany(Thread):
         self.channelcast_db = None
 
         self.search_manager = None
+        self.channel_manager = None
 
         self.videoplayer = None
 
@@ -167,6 +168,11 @@ class TriblerLaunchMany(Thread):
             if self.session.get_enable_torrent_search() or self.session.get_enable_channel_search():
                 self.search_manager = SearchManager(self.session)
                 self.search_manager.initialize()
+
+            if self.session.get_enable_channel_search():
+                from Tribler.Core.Modules.channel_manager import ChannelManager
+                self.channel_manager = ChannelManager(self.session)
+                self.channel_manager.initialize()
 
         if not self.initComplete:
             self.init(autoload_discovery)
@@ -465,7 +471,10 @@ class TriblerLaunchMany(Thread):
         try:
             basename = binascii.hexlify(infohash) + '.state'
             filename = os.path.join(self.session.get_downloads_pstate_dir(), basename)
-            return self.load_download_pstate(filename)
+            if os.path.exists(filename):
+                return self.load_download_pstate(filename)
+            else:
+                self._logger.info("%s not found", basename)
 
         except Exception:
             self._logger.exception("Exception while loading pstate: %s", infohash)
@@ -596,6 +605,9 @@ class TriblerLaunchMany(Thread):
         if self.torrent_checker:
             self.torrent_checker.shutdown()
             self.torrent_checker = None
+        if self.channel_manager:
+            self.channel_manager.shutdown()
+            self.channel_manager = None
         if self.search_manager:
             self.search_manager.shutdown()
             self.search_manager = None
@@ -609,10 +621,6 @@ class TriblerLaunchMany(Thread):
         if self.tracker_manager:
             self.tracker_manager.shutdown()
             self.tracker_manager = None
-
-        if self.tftp_handler:
-            self.tftp_handler.shutdown()
-            self.tftp_handler = None
 
         if self.torrent_store is not None:
             self.torrent_store.close()
@@ -632,6 +640,10 @@ class TriblerLaunchMany(Thread):
                 self._logger.info("lmc: Dispersy successfully shutdown in %.2f seconds", diff)
             else:
                 self._logger.info("lmc: Dispersy failed to shutdown in %.2f seconds", diff)
+
+        if self.tftp_handler:
+            self.tftp_handler.shutdown()
+            self.tftp_handler = None
 
         if self.session.get_megacache():
             self.channelcast_db.close()

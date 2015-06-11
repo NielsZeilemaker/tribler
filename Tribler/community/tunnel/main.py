@@ -24,6 +24,8 @@ from Tribler.Main.globals import DefaultDownloadStartupConfig
 from Tribler.community.tunnel.hidden_community import HiddenTunnelCommunity
 
 import logging.config
+from Tribler.Core.simpledefs import dlstatus_strings
+from Tribler.dispersy.candidate import Candidate
 logging.config.fileConfig("logger.conf")
 logger = logging.getLogger('TunnelMain')
 
@@ -128,7 +130,7 @@ class Tunnel(object):
         self.session.start()
         logger.info("Using port %d" % self.session.get_dispersy_port())
 
-    def start(self):
+    def start(self, introduce_port):
         def start_community():
             if self.crawl_keypair_filename:
                 keypair = read_keypair(self.crawl_keypair_filename)
@@ -141,7 +143,8 @@ class Tunnel(object):
 
             self.session.set_anon_proxy_settings(
                 2, ("127.0.0.1", self.session.get_tunnel_community_socks5_listen_ports()))
-
+            if introduce_port:
+                self.community.add_discovered_candidate(Candidate(('127.0.0.1', introduce_port), tunnel=False))
         blockingCallFromThread(reactor, start_community)
 
         self.session.set_download_states_callback(self.download_states_callback, False)
@@ -246,13 +249,18 @@ class LineHandler(LineReceiver):
                 logger.error("Profiling disabled!")
 
         elif line == 'c':
-            print "========\nCircuits\n========\nid\taddress\t\t\t\t\tgoal\thops\tIN (MB)\tOUT (MB)"
+            print "========\nCircuits\n========\nid\taddress\t\t\t\t\tgoal\thops\tIN (MB)\tOUT (MB)\tinfohash\ttype"
             for circuit_id, circuit in anon_tunnel.community.circuits.items():
-                print "%d\t%s:%d\t%d\t%d\t\t%.2f\t\t%.2f" % (circuit_id, circuit.first_hop[0],
-                                                             circuit.first_hop[1], circuit.goal_hops,
+                info_hash = circuit.info_hash.encode('hex')[:10] if circuit.info_hash else '?'
+                print "%d\t%s:%d\t%d\t%d\t\t%.2f\t\t%.2f\t\t%s\t%s" % (circuit_id,
+                                                             circuit.first_hop[0],
+                                                             circuit.first_hop[1],
+                                                             circuit.goal_hops,
                                                              len(circuit.hops),
                                                              circuit.bytes_down / 1024.0 / 1024.0,
-                                                             circuit.bytes_up / 1024.0 / 1024.0)
+                                                             circuit.bytes_up / 1024.0 / 1024.0,
+                                                             info_hash,
+                                                             circuit.ctype)
 
         elif line.startswith('s'):
             cur_path = os.getcwd()
@@ -267,7 +275,6 @@ class LineHandler(LineReceiver):
                 tdef.add_content(os.path.join(cur_path, filename))
                 tdef.set_tracker("udp://fake.net/announce")
                 tdef.set_private()
-                tdef.set_anonymous()
                 tdef.finalize()
                 tdef.save(os.path.join(cur_path, filename + '.torrent'))
             else:
@@ -277,11 +284,28 @@ class LineHandler(LineReceiver):
 
             defaultDLConfig = DefaultDownloadStartupConfig.getInstance()
             dscfg = defaultDLConfig.copy()
-            dscfg.set_hops(2)
+            dscfg.set_hops(1)
             dscfg.set_dest_dir(cur_path)
 
-            anon_tunnel.session.uch.perform_usercallback(lambda: anon_tunnel.session.start_download(tdef, dscfg))
+            def start_seeding():
+                def cb(ds):
+                    logger.info('Seed infohash=%s, up=%s, progress=%s, status=%s, seedpeers=%s, candidates=%d' %
+                                (tdef.get_infohash().encode('hex')[:10],
+                                 ds.get_current_speed('up'),
+                                 ds.get_progress(),
+                                 dlstatus_strings[ds.get_status()],
+                                 sum(ds.get_num_seeds_peers()),
+                                 sum(1 for _ in anon_tunnel.community.dispersy_yield_verified_candidates())))
+                    return 1.0, False
+                download = anon_tunnel.session.start_download(tdef, dscfg)
+                download.set_state_callback(cb, delay=1)
 
+            anon_tunnel.session.uch.perform_usercallback(start_seeding)
+        elif line.startswith('i'):
+            # Introduce dispersy port from other main peer to this peer
+            line_split = line.split(' ')
+            to_introduce = int(line_split[1])
+            self.anon_tunnel.community.add_discovered_candidate(Candidate(('127.0.0.1', to_introduce), tunnel=False))
         elif line.startswith('d'):
             line_split = line.split(' ')
             filename = 'test_file' if len(line_split) == 1 else line_split[1]
@@ -292,7 +316,7 @@ class LineHandler(LineReceiver):
 
             defaultDLConfig = DefaultDownloadStartupConfig.getInstance()
             dscfg = defaultDLConfig.copy()
-            dscfg.set_hops(2)
+            dscfg.set_hops(1)
             dscfg.set_dest_dir(os.path.join(os.getcwd(), 'downloader%s' % anon_tunnel.session.get_dispersy_port()))
 
             def start_download():
@@ -301,7 +325,7 @@ class LineHandler(LineReceiver):
                                 (tdef.get_infohash().encode('hex')[:10],
                                  ds.get_current_speed('down'),
                                  ds.get_progress(),
-                                 ds.get_status(),
+                                 dlstatus_strings[ds.get_status()],
                                  sum(ds.get_num_seeds_peers()),
                                  sum(1 for _ in anon_tunnel.community.dispersy_yield_verified_candidates())))
                     return 1.0, False
@@ -329,6 +353,7 @@ def main(argv):
     try:
         parser.add_argument('-p', '--socks5', help='Socks5 port')
         parser.add_argument('-x', '--exit', help='Allow being an exit-node')
+        parser.add_argument('-i', '--introduce', help='Introduce the dispersy port of another tribler instance')
         parser.add_argument('-d', '--dispersy', help='Dispersy port')
         parser.add_argument('-c', '--crawl', help='Enable crawler and use the keypair specified in the given filename')
         parser.add_argument('-j', '--json', help='Enable JSON api, which will run on the provided port number ' +
@@ -342,6 +367,7 @@ def main(argv):
         sys.exit(2)
 
     socks5_port = int(args.socks5) if args.socks5 else None
+    introduce_port = int(args.introduce) if args.introduce else None
     dispersy_port = int(args.dispersy) if args.dispersy else -1
     crawl_keypair_filename = args.crawl
     profile = args.yappi if args.yappi in ['wall', 'cpu'] else None
@@ -356,6 +382,12 @@ def main(argv):
         sys.exit(1)
 
     settings = TunnelSettings()
+    settings.max_time = 60
+
+    # For disbling anonymous downloading, limiting download to hidden services only
+    settings.min_circuits = 0
+    settings.max_circuits = 0
+
     if socks5_port is not None:
         settings.socks_listen_ports = range(socks5_port, socks5_port + 5)
     else:
@@ -367,10 +399,9 @@ def main(argv):
     else:
         logger.info("Exit-node disabled")
 
-    settings.do_test = False
     tunnel = Tunnel(settings, crawl_keypair_filename, dispersy_port)
     StandardIO(LineHandler(tunnel, profile))
-    tunnel.start()
+    tunnel.start(introduce_port)
 
     if crawl_keypair_filename and args.json > 0:
         cherrypy.config.update({'server.socket_host': '0.0.0.0', 'server.socket_port': args.json})

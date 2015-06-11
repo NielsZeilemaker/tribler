@@ -1,12 +1,13 @@
 # see LICENSE.txt for license information
-
-import unittest
-import os
-from time import time
 import binascii
+import os
+import unittest
+from time import time
 
+from Tribler.Test.common import UBUNTU_1504_INFOHASH
+from Tribler.Test.test_as_server import TestGuiAsServer, TESTS_DATA_DIR
 from Tribler.Core.simpledefs import DOWNLOAD
-from Tribler.Test.test_as_server import TestGuiAsServer, BASE_DIR
+
 
 TORRENT_R = r'http://torrent.fedoraproject.org/torrents/Fedora-Live-Workstation-x86_64-21.torrent'
 TORRENT_INFOHASH = binascii.unhexlify('89f0835dc2def218ec4bac73da6be6b8c20534ea')
@@ -31,7 +32,7 @@ class TestLibtorrentDownload(TestGuiAsServer):
         def do_downloadfromfile():
             self.guiUtility.showLibrary()
             self.frame.startDownload(
-                os.path.join(BASE_DIR, "data", "Pioneer.One.S01E06.720p.x264-VODO.torrent"), self.getDestDir())
+                os.path.join(TESTS_DATA_DIR, "Pioneer.One.S01E06.720p.x264-VODO.torrent"), self.getDestDir())
 
             self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready,
                                  'do_downloadfromfile() failed')
@@ -63,7 +64,7 @@ class TestLibtorrentDownload(TestGuiAsServer):
         self.startTest(do_downloadfromurl)
 
     def test_downloadfrommagnet(self):
-        infohash = binascii.unhexlify('5ac55cf1b935291f6fc92ad7afd34597498ff2f7')
+        infohash = UBUNTU_1504_INFOHASH
 
         def make_screenshot():
             self.screenshot('After starting a libtorrent download from magnet')
@@ -80,7 +81,8 @@ class TestLibtorrentDownload(TestGuiAsServer):
         def do_downloadfrommagnet():
             self.guiUtility.showLibrary()
             self.frame.startDownloadFromMagnet(
-                r'magnet:?xt=urn:btih:5ac55cf1b935291f6fc92ad7afd34597498ff2f7&dn=Pioneer+One+S01E01+Xvid-VODO&title=', self.getDestDir())
+                r'magnet:?xt=urn:btih:%s&dn=ubuntu-14.04.2-desktop-amd64.iso' % binascii.hexlify(UBUNTU_1504_INFOHASH),
+                self.getDestDir())
 
             self.CallConditional(30, lambda: self.session.get_download(infohash), download_object_ready,
                                  'do_downloadfrommagnet() failed')
@@ -170,7 +172,9 @@ class TestLibtorrentDownload(TestGuiAsServer):
                                  .vod_playing, check_playlist, "streaming did not start")
 
         def do_vod():
-            ds = self.frame.startDownload(os.path.join(BASE_DIR, "data", "Pioneer.One.S01E06.720p.x264-VODO.torrent"),
+            from Tribler.Core.Video.VideoPlayer import VideoPlayer
+
+            ds = self.frame.startDownload(os.path.join(TESTS_DATA_DIR, "Pioneer.One.S01E06.720p.x264-VODO.torrent"),
                                           self.getDestDir(),
                                           selectedFiles=[
                                               os.path.join('Sample', 'Pioneer.One.S01E06.720p.x264.Sample-VODO.mkv')],
@@ -178,8 +182,7 @@ class TestLibtorrentDownload(TestGuiAsServer):
             # set the max prebuffsize to be smaller so that the unit test runs faster
             ds.max_prebuffsize = 16 * 1024
             self.guiUtility.ShowPlayer()
-            self.CallConditional(30, lambda: self.guiUtility.videoplayer
-                                 .get_vod_download(), do_monitor, "VOD download not found")
+            self.CallConditional(30, self.guiUtility.videoplayer.get_vod_download, do_monitor, "VOD download not found")
 
         self.startTest(do_vod)
 
