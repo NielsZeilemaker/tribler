@@ -50,8 +50,7 @@ class TestDoubleEntryCommunity(unittest.TestCase):
     def test_hash_signature_response(self):
         # Arrange
         message = TestMessage(TestBlock())
-        # Actge)
-        # Assert
+        # Act
         result = DoubleEntryCommunity.hash_signature_response(message)
         # Assert
         self.assertEqual(result, message.payload.id)

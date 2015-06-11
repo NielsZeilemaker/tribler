@@ -1,5 +1,6 @@
 import logging
 import base64
+import random
 from hashlib import sha1
 
 from Tribler.dispersy.authentication import MemberAuthentication
@@ -32,7 +33,6 @@ class DoubleEntryCommunity(Community):
         self._ec = self.my_member.private_key
         self._public_key = ECCrypto().key_to_bin(self._ec.pub())
         self.persistence = Persistence(self.dispersy.working_directory)
-        self.candidate_queue = []
 
     def initialize(self, a=None, b=None):
         super(DoubleEntryCommunity, self).initialize()
@@ -69,16 +69,16 @@ class DoubleEntryCommunity(Community):
                     DirectDistribution(),
                     CandidateDestination(),
                     SignatureRequestPayload(),
-                    self._check_signature_request,
-                    self._on_signature_request),
+                    self.check_signature_request,
+                    self.on_signature_request),
             Message(self, SIGNATURE_RESPONSE,
                     MemberAuthentication(),
                     PublicResolution(),
                     DirectDistribution(),
                     CandidateDestination(),
                     SignatureResponsePayload(),
-                    self._check_signature_response,
-                    self._on_signature_response)]
+                    self.check_signature_response,
+                    self.on_signature_response)]
 
     def initiate_conversions(self):
         return [DefaultConversion(self), DoubleEntryConversion(self)]
@@ -89,7 +89,7 @@ class DoubleEntryCommunity(Community):
         """
         self._logger.info("Sending signature request.")
         message = self.create_signature_request_message(candidate)
-        self.dispersy.store_update_forward([message], True, True, True)
+        self.dispersy.store_update_forward([message], False, False, True)
 
     def create_signature_request_message(self, candidate):
         """
@@ -120,20 +120,7 @@ class DoubleEntryCommunity(Community):
                             payload=data_without_signature + (signature,))
         return message
 
-    def validate_signature_request(self, signature_request):
-        """
-        Validates if the signature_request message contains correct signatures and public keys.
-        :param signature_request: The message that needs to be checked.
-        :return: Boolean containing the truth value of the validity of the message.
-        """
-        payload = signature_request.payload
-        # Check if the request is not already processed.
-        return (not self.persistence.contains_signature(payload.signature_requester, payload.public_key_requester) and
-                # Check if the request is valid
-                self.validate_signature(payload.public_key_requester, payload.signature_data_requester(),
-                                        payload.signature_requester))
-
-    def _check_signature_request(self, messages):
+    def check_signature_request(self, messages):
         """
         Generator that generates a list of correct signature_request messages from a list of messages.
         :param messages: Potential valid signature_request messages.
@@ -141,25 +128,32 @@ class DoubleEntryCommunity(Community):
         """
         self._logger.info("Received " + str(len(messages)) + " signature requests.")
         for message in messages:
-            if self.validate_signature_request(message):
-                self._logger.info("Received valid request.")
-                yield message
-            else:
-                DropMessage(message, "Invalid signature request message")
+            payload = message.payload
+            # Check if the messages are not from ourselves.
+            if message.payload.public_key_requester != self._public_key:
+                # Check if the request is not already processed and contains a valid signature.
+                if not self.persistence.contains_signature(payload.signature_requester, payload.public_key_requester) and \
+                        self.validate_signature(payload.public_key_requester, payload.signature_data_requester(),
+                                                payload.signature_requester):
+                    self._logger.info("Received valid request.")
+                    yield message
+                else:
+                    yield DropMessage(message, "Invalid signature request message")
 
-    def _on_signature_request(self, messages):
+            else:
+                yield DropMessage(message, "Invalid signature request message")
+
+    def on_signature_request(self, messages):
         """
         Handles behaviour of the community when it receives a signature_request message.
         It will send out a signature response
         :param messages: Signature_request messages that needs to be handled.
         """
         for message in messages:
-            # Check if the messages are not from ourselves.
-            if message.payload.public_key_requester != self._public_key:
-                self.publish_signature_response_message(message)
+            self.publish_signature_response_message(message)
 
     def next_candidate(self):
-        return self.candidate_queue.pop()
+        return self.candidates[random.choice(self.candidates.keys())]
 
     def publish_signature_response_message(self, signature_request):
         """
@@ -170,7 +164,7 @@ class DoubleEntryCommunity(Community):
         self._logger.info("Sending signature response.")
         message = self.create_signature_response_message(signature_request)
         self.persist_signature_response(message)
-        self._dispersy.store_update_forward([message], True, True, True)
+        self._dispersy.store_update_forward([message], False, False, True)
 
     def create_signature_response_message(self, signature_request):
         """
@@ -185,6 +179,7 @@ class DoubleEntryCommunity(Community):
         down = 2
         total_up = 3
         total_down = 4
+        self._logger.info("Sequence Number: " + str(signature_request.payload.sequence_number_requester))
         sequence_number_requester = signature_request.payload.sequence_number_requester
         previous_hash_requester = signature_request.payload.previous_hash_requester
         public_key_requester = signature_request.payload.public_key_requester
@@ -194,6 +189,7 @@ class DoubleEntryCommunity(Community):
         sequence_number_responder = self.persistence.get_latest_sequence_number(self._public_key)
         previous_hash_responder = self.persistence.get_previous_id()
         public_key_responder = ECCrypto().key_to_bin(self._ec.pub())
+
         # Sign the request.
         data_without_signature = (up, down, total_up, total_down,
                                   sequence_number_requester, previous_hash_requester, public_key_requester,
@@ -208,24 +204,7 @@ class DoubleEntryCommunity(Community):
                             payload=data_without_signature + (signature,))
         return message
 
-    def validate_signature_response(self, signature_response):
-        """
-        Validates if the signature_response message contains correct signatures and public keys.
-        :param signature_response: The message that needs to be checked.
-        :return: Boolean containing the truth value of the validity of the message.
-        """
-        payload = signature_response.payload
-        # Check if the request part is valid.
-        valid_request = self.validate_signature(payload.public_key_requester, payload.signature_data_requester(),
-                                                payload.signature_requester)
-        # Check if the response part is valid.
-        valid_response = self.validate_signature(payload.public_key_responder, payload.signature_data_responder(),
-                                                 payload.signature_responder)
-
-        # Both have to be valid.
-        return valid_request and valid_response
-
-    def _check_signature_response(self, messages):
+    def check_signature_response(self, messages):
         """
         Generator that generates a list of correct signature_response messages from a list of messages.
         :param messages: Potential valid signature_response messages.
@@ -233,23 +212,31 @@ class DoubleEntryCommunity(Community):
         """
         self._logger.info("Received " + str(len(messages)) + " signature responses.")
         for message in messages:
-            # For now do no checking.
-            if self.validate_signature_response(message):
-                self._logger.info("Received valid response")
-                yield message
+            # Check if it is not from ourselves.
+            if message.payload.public_key_responder != self._public_key:
+                payload = message.payload
+                # Check if the request part is valid
+                valid_request = self.validate_signature(
+                    payload.public_key_requester, payload.signature_data_requester(), payload.signature_requester)
+                # Check if the response part is valid
+                valid_response = self.validate_signature(
+                    payload.public_key_responder, payload.signature_data_responder(), payload.signature_responder)
+                if valid_request and valid_response:
+                    self._logger.info("Received valid response")
+                    yield message
+                else:
+                    yield DropMessage("Invalid signature response message")
             else:
-                DropMessage(message, "Invalid signature response message")
+                yield DropMessage(message, "Signature response message from ourselves.")
 
-    def _on_signature_response(self, messages):
+    def on_signature_response(self, messages):
         """
         Handles behaviour of the community when it receives a signature_response message.
         It persist the signature response.
         :param messages: Signature_response messages that needs to be handled.
         """
         for message in messages:
-            # Check if the messages are not from ourselves.
-            if message.payload.public_key_responder != self._public_key:
-                self.persist_signature_response(message)
+            self.persist_signature_response(message)
 
     def persist_signature_response(self, message):
         """
@@ -260,12 +247,6 @@ class DoubleEntryCommunity(Community):
         message_hash = self.hash_signature_response(message)
         self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))
         self.persistence.add_block(message_hash, message.payload)
-
-    def on_introduction_response(self, messages):
-        super(DoubleEntryCommunity, self).on_introduction_response(messages)
-        for message in messages:
-            self._logger.info("in on_introduction_response: Saving %s candidate.", message.candidate)
-            self.candidate_queue.append(message.candidate)
 
     @staticmethod
     def hash_signature_response(message):

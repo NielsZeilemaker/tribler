@@ -74,7 +74,9 @@ class Persistence:
         :return:
         """
         self._working_directory = working_directory
-        self.db = None
+
+        self.db = DoubleEntryDB(self._working_directory)
+        self.db.open()
 
     def add_block(self, block_id, block):
         """
@@ -82,7 +84,6 @@ class Persistence:
         :param block_id: The ID the block is saved under. This is the hash of the block.
         :param block: The data that will be saved.
         """
-        self._init_database()
         data = tuple(map(encode_db,
                          (block_id,
                           block.previous_hash_requester, block.public_key_requester, block.signature_requester,
@@ -98,14 +99,12 @@ class Persistence:
             data)
 
         self._set_previous_id(block_id)
-        self.db.commit()
 
     def _set_previous_id(self, block_id):
         """
         Update the id of the latest block chain.
         :param block_id: The id of the block
         """
-        self._init_database()
         self.db.execute(u"UPDATE `option` SET value = '" + encode_db(block_id) +
                         u"' WHERE key == 'previous_id';")
 
@@ -114,8 +113,6 @@ class Persistence:
         Get the id of the latest block in the chain.
         :return: block_id
         """
-        self._init_database()
-
         db_result = self.db.execute(u"SELECT value FROM `option`  WHERE key == 'previous_id' LIMIT 0,1").fetchone()[0]
 
         return decode_db(db_result)
@@ -125,8 +122,6 @@ class Persistence:
         Returns a block saved in the persistence
         :param block_id: The id of the block that needs to be retrieved.
         """
-        self._init_database()
-
         db_result = self.db.execute(u"SELECT previous_hash_requester, public_key_requester, signature_requester,"
                                     u" previous_hash_responder, public_key_responder, signature_responder, "
                                     u"sequence_number_requester, sequence_number_responder,"
@@ -141,8 +136,6 @@ class Persistence:
         Get all the IDs saved in the persistence layer.
         :return: list of ids.
         """
-        self._init_database()
-
         db_result = self.db.execute(u"SELECT block_hash from double_entry").fetchall()
         # Unpack the db_result tuples and decode the results.
         return [decode_db(x[0]) for x in db_result]
@@ -153,8 +146,6 @@ class Persistence:
         :param block_id: The id t hat needs to be checked.
         :return: True if the block exists, else false.
         """
-        self._init_database()
-
         db_result = self.db.execute(u"SELECT block_hash from double_entry where block_hash == '" +
                                     encode_db(block_id) + u"' LIMIT 0,1").fetchone()
         return db_result is not None
@@ -166,8 +157,6 @@ class Persistence:
         :return: True if the block exists, else false.
         :rtype : bool
         """
-        self._init_database()
-
         db_result = self.db.execute(u"SELECT block_hash from double_entry "
                                     u"WHERE public_key_requester == '" + encode_db(public_key_requester) +
                                     u"' and signature_requester == '" + encode_db(signature_requester) +
@@ -181,8 +170,6 @@ class Persistence:
         :param public_key: Corresponding public key
         :return: sequence number (integer) or -1 if no block is known
         """
-        self._init_database()
-
         db_result = self.db.execute(u"SELECT MAX(sequence_number) FROM"
                                     u"(SELECT sequence_number_requester as sequence_number FROM double_entry "
                                     u"WHERE public_key_requester == '" + encode_db(public_key) + u"' UNION "
@@ -192,14 +179,6 @@ class Persistence:
             return decode_db(db_result)
         else:
             return -1
-
-    def _init_database(self):
-        """
-        :return: Initiate the database and setup the connection.
-        """
-        if self.db is None:
-            self.db = DoubleEntryDB(self._working_directory)
-            self.db.open()
 
     def close(self):
         """

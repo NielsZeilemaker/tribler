@@ -73,6 +73,9 @@ class TestBlock:
 
 class DoubleEntryTestCase(AbstractServer):
 
+    def __init__(self, *args, **kwargs):
+        super(DoubleEntryTestCase, self).__init__(*args, **kwargs)
+
     def assertEqual_block(self, expected_block, actual_block):
         """
         Function to assertEqual two blocks

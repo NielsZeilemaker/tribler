@@ -36,23 +36,25 @@ class TestEncodingDatabase(unittest.TestCase):
         self.assertRaises(TypeError, encode_db, unknown_type)
 
 
-class TestPersistence(DoubleEntryTestCase):
+class TestDatabase(DoubleEntryTestCase):
     """
     Tests the Persister for DoubleEntry community.
     """
 
     def __init__(self, *args, **kwargs):
-        super(TestPersistence, self).__init__(*args, **kwargs)
+        super(TestDatabase, self).__init__(*args, **kwargs)
+
         self.public_key = "own_key"
+        self.persistence = None
 
-        self.persistence = Persistence(self.getStateDir())
-
-    def setUp(self):
+    def setUp(self, **kwargs):
+        super(TestDatabase, self).setUp(**kwargs)
         path = os.path.join(self.getStateDir(), DATABASE_DIRECTORY)
         if not os.path.exists(path):
             os.makedirs(path)
+        self.persistence = Persistence(self.getStateDir())
 
-    def tearDown(self):
+    def tearDown(self, **kwargs):
         self.persistence.close()
         os.remove(os.path.join(self.getStateDir(), DATABASE_PATH))
         os.rmdir(os.path.join(self.getStateDir(), DATABASE_DIRECTORY))
@@ -72,7 +74,6 @@ class TestPersistence(DoubleEntryTestCase):
         # Assert
         self.assertEquals(db.get_previous_id(), block1.id)
         result = db.get(block1.id)
-        super(TestPersistence, self).assertEqual_block(block1, result)
 
     def test_add_two_blocks(self):
         # Arrange
@@ -85,7 +86,7 @@ class TestPersistence(DoubleEntryTestCase):
         # Assert
         self.assertEquals(db.get_previous_id(), block2.id)
         result = db.get(block2.id)
-        super(TestPersistence, self).assertEqual_block(block2, result)
+        super(TestDatabase, self).assertEqual_block(block2, result)
 
     def test_contains_block_id_positive(self):
         # Arrange
@@ -149,3 +150,7 @@ class TestPersistence(DoubleEntryTestCase):
         db.add_block(block2.id, block2)
         # Act & Assert
         self.assertEquals(db.get_latest_sequence_number(block1.public_key_responder), block1.sequence_number_responder)
+
+
+if __name__ == '__main__':
+    unittest.main()
