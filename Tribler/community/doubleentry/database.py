@@ -62,9 +62,11 @@ cleanup = u"DELETE FROM double_entry;" \
           u"' WHERE key == 'previous_id';"
 
 
-class Persistence:
+class DoubleEntryDB(Database):
     """
     Persistence layer for the DoubleEntry Community.
+    Connection layer to SQLiteDB.
+    Ensures a proper DB schema on startup.
     """
     def __init__(self, working_directory):
         """
@@ -73,10 +75,9 @@ class Persistence:
         that will contain the the db at workingdirectory/DATABASE_PATH
         :return:
         """
-        self._working_directory = working_directory
+        super(DoubleEntryDB, self).__init__(path.join(working_directory, DATABASE_PATH))
 
-        self.db = DoubleEntryDB(self._working_directory)
-        self.db.open()
+        self.open()
 
     def add_block(self, block_id, block):
         """
@@ -91,7 +92,7 @@ class Persistence:
                           block.sequence_number_requester, block.sequence_number_responder,
                           block.up, block.down, block.total_up, block.total_down)))
 
-        self.db.execute(
+        self.execute(
             u"INSERT INTO double_entry (block_hash, previous_hash_requester, public_key_requester, "
             u"signature_requester, previous_hash_responder, public_key_responder, signature_responder,"
             u" sequence_number_requester, sequence_number_responder, up, down, total_up, total_down) "
@@ -105,7 +106,7 @@ class Persistence:
         Update the id of the latest block chain.
         :param block_id: The id of the block
         """
-        self.db.execute(u"UPDATE `option` SET value = '" + encode_db(block_id) +
+        self.execute(u"UPDATE `option` SET value = '" + encode_db(block_id) +
                         u"' WHERE key == 'previous_id';")
 
     def get_previous_id(self):
@@ -113,7 +114,7 @@ class Persistence:
         Get the id of the latest block in the chain.
         :return: block_id
         """
-        db_result = self.db.execute(u"SELECT value FROM `option`  WHERE key == 'previous_id' LIMIT 0,1").fetchone()[0]
+        db_result = self.execute(u"SELECT value FROM `option`  WHERE key == 'previous_id' LIMIT 0,1").fetchone()[0]
 
         return decode_db(db_result)
 
@@ -122,7 +123,7 @@ class Persistence:
         Returns a block saved in the persistence
         :param block_id: The id of the block that needs to be retrieved.
         """
-        db_result = self.db.execute(u"SELECT previous_hash_requester, public_key_requester, signature_requester,"
+        db_result = self.execute(u"SELECT previous_hash_requester, public_key_requester, signature_requester,"
                                     u" previous_hash_responder, public_key_responder, signature_responder, "
                                     u"sequence_number_requester, sequence_number_responder,"
                                     u" up, down, total_up, total_down"
@@ -136,7 +137,7 @@ class Persistence:
         Get all the IDs saved in the persistence layer.
         :return: list of ids.
         """
-        db_result = self.db.execute(u"SELECT block_hash from double_entry").fetchall()
+        db_result = self.execute(u"SELECT block_hash from double_entry").fetchall()
         # Unpack the db_result tuples and decode the results.
         return [decode_db(x[0]) for x in db_result]
 
@@ -146,8 +147,8 @@ class Persistence:
         :param block_id: The id t hat needs to be checked.
         :return: True if the block exists, else false.
         """
-        db_result = self.db.execute(u"SELECT block_hash from double_entry where block_hash == '" +
-                                    encode_db(block_id) + u"' LIMIT 0,1").fetchone()
+        db_result = self.execute(u"SELECT block_hash from double_entry where block_hash == '" +
+                                 encode_db(block_id) + u"' LIMIT 0,1").fetchone()
         return db_result is not None
 
     def contains_signature(self, signature_requester, public_key_requester):
@@ -157,10 +158,10 @@ class Persistence:
         :return: True if the block exists, else false.
         :rtype : bool
         """
-        db_result = self.db.execute(u"SELECT block_hash from double_entry "
-                                    u"WHERE public_key_requester == '" + encode_db(public_key_requester) +
-                                    u"' and signature_requester == '" + encode_db(signature_requester) +
-                                    u"' LIMIT 0,1").fetchone()
+        db_result = self.execute(u"SELECT block_hash from double_entry "
+                                 u"WHERE public_key_requester == '" + encode_db(public_key_requester) +
+                                 u"' and signature_requester == '" + encode_db(signature_requester) +
+                                 u"' LIMIT 0,1").fetchone()
         return db_result is not None
 
     def get_latest_sequence_number(self, public_key):
@@ -170,31 +171,15 @@ class Persistence:
         :param public_key: Corresponding public key
         :return: sequence number (integer) or -1 if no block is known
         """
-        db_result = self.db.execute(u"SELECT MAX(sequence_number) FROM"
-                                    u"(SELECT sequence_number_requester as sequence_number FROM double_entry "
-                                    u"WHERE public_key_requester == '" + encode_db(public_key) + u"' UNION "
-                                    u"SELECT sequence_number_responder from double_entry "
-                                    u"WHERE public_key_responder = '" + encode_db(public_key) + u"')").fetchone()[0]
+        db_result = self.execute(u"SELECT MAX(sequence_number) FROM"
+                                 u"(SELECT sequence_number_requester as sequence_number FROM double_entry "
+                                 u"WHERE public_key_requester == '" + encode_db(public_key) + u"' UNION "
+                                 u"SELECT sequence_number_responder from double_entry "
+                                 u"WHERE public_key_responder = '" + encode_db(public_key) + u"')").fetchone()[0]
         if db_result is not None:
             return decode_db(db_result)
         else:
             return -1
-
-    def close(self):
-        """
-        Close the persistence
-        """
-        if self.db:
-            self.db.close()
-
-
-class DoubleEntryDB(Database):
-    """ Connection layer to SQLiteDB.
-    Ensures a proper DB schema on startup.
-    """
-
-    def __init__(self, working_directory):
-        super(DoubleEntryDB, self).__init__(path.join(working_directory, DATABASE_PATH))
 
     def open(self, initial_statements=True, prepare_visioning=True):
         return super(DoubleEntryDB, self).open(initial_statements, prepare_visioning)

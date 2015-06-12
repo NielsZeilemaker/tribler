@@ -15,7 +15,7 @@ from Tribler.dispersy.conversion import DefaultConversion
 from Tribler.community.doubleentry.payload import SignatureRequestPayload, SignatureResponsePayload, \
     encode_signing_format
 from Tribler.community.doubleentry.conversion import DoubleEntryConversion
-from Tribler.community.doubleentry.database import Persistence
+from Tribler.community.doubleentry.database import DoubleEntryDB
 
 SIGNATURE_REQUEST = u"de_signature_request"
 SIGNATURE_RESPONSE = u"de_signature_response"
@@ -32,7 +32,7 @@ class DoubleEntryCommunity(Community):
 
         self._ec = self.my_member.private_key
         self._public_key = ECCrypto().key_to_bin(self._ec.pub())
-        self.persistence = Persistence(self.dispersy.working_directory)
+        self.persistence = DoubleEntryDB(self.dispersy.working_directory)
 
     def initialize(self, a=None, b=None):
         super(DoubleEntryCommunity, self).initialize()
@@ -138,10 +138,10 @@ class DoubleEntryCommunity(Community):
                     self._logger.info("Received valid request.")
                     yield message
                 else:
-                    yield DropMessage(message, "Invalid signature request message")
+                    yield DropMessage(message, "Invalid signature request message.")
 
             else:
-                yield DropMessage(message, "Invalid signature request message")
+                yield DropMessage(message, "Invalid signature request message, send by me.")
 
     def on_signature_request(self, messages):
         """
@@ -222,12 +222,12 @@ class DoubleEntryCommunity(Community):
                 valid_response = self.validate_signature(
                     payload.public_key_responder, payload.signature_data_responder(), payload.signature_responder)
                 if valid_request and valid_response:
-                    self._logger.info("Received valid response")
+                    self._logger.info("Received valid response.")
                     yield message
                 else:
-                    yield DropMessage("Invalid signature response message")
+                    yield DropMessage("Invalid signature response message.")
             else:
-                yield DropMessage(message, "Signature response message from ourselves.")
+                yield DropMessage(message, "Invalid signature response message, send by me.")
 
     def on_signature_response(self, messages):
         """

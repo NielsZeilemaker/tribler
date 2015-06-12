@@ -3,7 +3,7 @@ import os
 import random
 
 from Tribler.Test.test_doubleentry_utilities import TestBlock, DoubleEntryTestCase
-from Tribler.community.doubleentry.database import Persistence
+from Tribler.community.doubleentry.database import DoubleEntryDB
 from Tribler.community.doubleentry.database import GENESIS_ID, DATABASE_DIRECTORY, DATABASE_PATH
 from Tribler.community.doubleentry.database import encode_db, decode_db
 
@@ -38,7 +38,7 @@ class TestEncodingDatabase(unittest.TestCase):
 
 class TestDatabase(DoubleEntryTestCase):
     """
-    Tests the Persister for DoubleEntry community.
+    Tests the Database for DoubleEntry community.
     """
 
     def __init__(self, *args, **kwargs):
@@ -52,7 +52,7 @@ class TestDatabase(DoubleEntryTestCase):
         path = os.path.join(self.getStateDir(), DATABASE_DIRECTORY)
         if not os.path.exists(path):
             os.makedirs(path)
-        self.persistence = Persistence(self.getStateDir())
+        self.persistence = DoubleEntryDB(self.getStateDir())
 
     def tearDown(self, **kwargs):
         self.persistence.close()
