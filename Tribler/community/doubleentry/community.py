@@ -75,7 +75,7 @@ class DoubleEntryCommunity(Community):
         """
         self._logger.info("Sending signature request.")
         message = self.create_signature_request_message(candidate)
-        self.dispersy.store_update_forward([message], False, False, True)
+        self.create_signature_request(candidate, message, self.allow_signature_response)
 
     def create_signature_request_message(self, candidate):
         """
@@ -96,9 +96,8 @@ class DoubleEntryCommunity(Community):
         payload = (up, down, total_up, total_down, sequence_number_requester, previous_hash_requester)
         
         meta = self.get_meta_message(SIGNATURE)
-        message = meta.impl(authentication=(self.my_member,),
+        message = meta.impl(authentication=([self.my_member, candidate.get_member], ),
                             distribution=(self.claim_global_time(),),
-                            destination=(candidate,),
                             payload=payload)
         return message
     
