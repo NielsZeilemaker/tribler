@@ -64,7 +64,7 @@ class DoubleEntryCommunity(Community):
                     CandidateDestination(),
                     SignaturePayload(),
                     self._generic_timeline_check,
-                    self.on_signature_response)]
+                    self.on_signature)]
 
     def initiate_conversions(self):
         return [DefaultConversion(self), DoubleEntryConversion(self)]
