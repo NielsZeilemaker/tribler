@@ -63,7 +63,7 @@ class DoubleEntryCommunity(Community):
                     DirectDistribution(),
                     CandidateDestination(),
                     SignaturePayload(),
-                    self.check_signature_response,
+                    self._generic_timeline_check,
                     self.on_signature_response)]
 
     def initiate_conversions(self):
@@ -132,39 +132,25 @@ class DoubleEntryCommunity(Community):
             b. False, if not (because of inconsistencies in the payload)
         """
         
-        if request.payload.sequence_number_requester == response.payload.sequence_number_requester and \
-            request.payload.previous_hash_requester == response.payload.previous_hash_requester:
-            
-            #our values did not change, accept
-            self.persist_signature_response(response)
-            return True
-        return False
+        return request.payload.sequence_number_requester == response.payload.sequence_number_requester and \
+            request.payload.previous_hash_requester == response.payload.previous_hash_requester
+
 
     def next_candidate(self):
         return self.candidates[random.choice(self.candidates.keys())]
 
-    def persist_signature_response(self, message):
+    
+    def on_signature(self, messages):
         """
-        Persist the signature response message.
-        A hash will be created from the message and this will be used as an unique identifier.
-        :param message:
+        Handles behaviour of the community when it receives a signature_response message.
+        It persist the signature response.
+        :param messages: Signature messages that needs to be handled.
         """
-        message_hash = self.hash_signature_response(message)
-        self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))
-        self.persistence.add_block(message_hash, message.payload)
-
-    @staticmethod
-    def hash_signature_response(message):
-        """
-        Create a hash of a signature response message.
-        :param message: The message a hash has to be taken from
-        :return: Hash
-        """
-        # Create the hash using SHA1.
-        return sha1(message.payload.packet).digest()
-
-    def get_key(self):
-        return self._ec
+        for message in messages:
+            message_hash = sha1(message.payload.packet).digest()
+            self._logger.info("Persisting sr: %s." % base64.encodestring(message_hash))
+            
+            self.persistence.add_block(message_hash, message.payload)
 
     def unload_community(self):
         self._logger.debug("Unloading the DoubleEntry Community.")
